@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PATH=\"/usr/local/go/bin:$PATH\")",
+      "Bash(/usr/local/go/bin/go mod init:*)",
+      "WebFetch(domain:www.shadcn-vue.com)",
+      "Bash(npm install:*)",
+      "Bash(npx:*)"
+    ]
+  }
+}
