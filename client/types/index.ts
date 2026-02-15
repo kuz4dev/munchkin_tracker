@@ -9,17 +9,28 @@ export interface Player {
   class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric'
 }
 
+export interface ChangeLogEntry {
+  timestamp: number
+  playerName: string
+  eventType: 'join' | 'leave' | 'stat_change'
+  field?: string
+  oldValue?: string
+  newValue?: string
+}
+
 export type IncomingMessageType =
   | 'room_state'
   | 'player_joined'
   | 'player_left'
   | 'player_updated'
+  | 'changelog_entry'
   | 'error'
 
 export interface RoomStateMessage {
   type: 'room_state'
   roomCode: string
   players: Player[]
+  changeLog?: ChangeLogEntry[]
 }
 
 export interface PlayerJoinedMessage {
@@ -42,11 +53,17 @@ export interface ErrorMessage {
   message: string
 }
 
+export interface ChangeLogEntryMessage {
+  type: 'changelog_entry'
+  changeLogEntry: ChangeLogEntry
+}
+
 export type ServerMessage =
   | RoomStateMessage
   | PlayerJoinedMessage
   | PlayerLeftMessage
   | PlayerUpdatedMessage
+  | ChangeLogEntryMessage
   | ErrorMessage
 
 export interface OutgoingJoinMessage {

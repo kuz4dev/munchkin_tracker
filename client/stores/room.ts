@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
 import { createRoom as apiCreateRoom } from '@/services/roomApi'
 import { saveSession, clearSession } from '@/services/sessionStorage'
-import type { Player, ServerMessage } from '@/types'
+import type { ChangeLogEntry, Player, ServerMessage } from '@/types'
 
 export const useRoomStore = defineStore('room', () => {
   const connection = useConnectionStore()
@@ -13,6 +13,7 @@ export const useRoomStore = defineStore('room', () => {
   const playerName = ref('')
   const sessionId = ref('')
   const players = reactive(new Map<string, Player>())
+  const changelog = ref<ChangeLogEntry[]>([])
   let joinedOnce = false // prevents watcher from double-sending join_room
 
   const connected = computed(() => connection.isConnected)
@@ -49,6 +50,7 @@ export const useRoomStore = defineStore('room', () => {
         for (const p of msg.players) {
           players.set(p.id, p)
         }
+        changelog.value = msg.changeLog ?? []
         if (msg.players.length > 0 && !playerId.value) {
           // If we have a sessionId (rejoin), find our player by it
           if (sessionId.value) {
@@ -88,6 +90,13 @@ export const useRoomStore = defineStore('room', () => {
       case 'player_updated':
         if (msg.player.id !== playerId.value) {
           players.set(msg.player.id, msg.player)
+        }
+        break
+
+      case 'changelog_entry':
+        changelog.value.push(msg.changeLogEntry)
+        if (changelog.value.length > 100) {
+          changelog.value = changelog.value.slice(-100)
         }
         break
 
@@ -156,6 +165,7 @@ export const useRoomStore = defineStore('room', () => {
     connection.send({ type: 'leave_room' })
     connection.disconnect()
     players.clear()
+    changelog.value = []
     roomCode.value = ''
     playerId.value = ''
     sessionId.value = ''
@@ -169,6 +179,7 @@ export const useRoomStore = defineStore('room', () => {
     playerName,
     sessionId,
     players,
+    changelog,
     connected,
     currentPlayer,
     otherPlayers,

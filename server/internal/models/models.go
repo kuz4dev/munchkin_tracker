@@ -20,6 +20,15 @@ type RoomInfo struct {
 	PlayerCount int    `json:"playerCount"`
 }
 
+type ChangeLogEntry struct {
+	Timestamp  int64  `json:"timestamp"`
+	PlayerName string `json:"playerName"`
+	EventType  string `json:"eventType"`
+	Field      string `json:"field,omitempty"`
+	OldValue   string `json:"oldValue,omitempty"`
+	NewValue   string `json:"newValue,omitempty"`
+}
+
 // WebSocket message types
 
 type IncomingMessage struct {
@@ -31,10 +40,12 @@ type IncomingMessage struct {
 }
 
 type OutgoingMessage struct {
-	Type     string    `json:"type"`
-	RoomCode string    `json:"roomCode,omitempty"`
-	Players  []*Player `json:"players,omitempty"`
-	Player   *Player   `json:"player,omitempty"`
-	PlayerID string    `json:"playerId,omitempty"`
-	Message  string    `json:"message,omitempty"`
+	Type           string            `json:"type"`
+	RoomCode       string            `json:"roomCode,omitempty"`
+	Players        []*Player         `json:"players,omitempty"`
+	Player         *Player           `json:"player,omitempty"`
+	PlayerID       string            `json:"playerId,omitempty"`
+	Message        string            `json:"message,omitempty"`
+	ChangeLog      []*ChangeLogEntry `json:"changeLog,omitempty"`
+	ChangeLogEntry *ChangeLogEntry   `json:"changeLogEntry,omitempty"`
 }

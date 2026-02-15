@@ -1,1 +1,1 @@
-export { RACES, CLASSES, GENDERS } from './game'
+export { RACES, CLASSES, GENDERS, FIELD_LABELS } from './game'

@@ -8,6 +8,7 @@ import { getRoomInfo } from '@/services/roomApi'
 import RoomHeader from '@/components/RoomHeader.vue'
 import StatsEditor from '@/components/StatsEditor.vue'
 import PlayerCard from '@/components/PlayerCard.vue'
+import ChangeLog from '@/components/ChangeLog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -72,6 +73,9 @@ function copyRoomCode() {
       <template v-else-if="roomStore.roomCode">
         <!-- Stats Editor for current player -->
         <StatsEditor />
+
+        <!-- Change Log -->
+        <ChangeLog />
 
         <!-- Other players -->
         <section v-if="roomStore.otherPlayers.length > 0">

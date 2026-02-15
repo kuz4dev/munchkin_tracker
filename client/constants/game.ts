@@ -19,3 +19,11 @@ export const GENDERS: { value: Player['gender']; label: string }[] = [
   { value: 'male', label: 'Мужской' },
   { value: 'female', label: 'Женский' },
 ]
+
+export const FIELD_LABELS: Record<string, string> = {
+  level: 'уровень',
+  gearBonus: 'бонусы',
+  gender: 'пол',
+  race: 'раса',
+  class: 'класс',
+}

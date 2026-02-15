@@ -3,11 +3,14 @@ package room
 import (
 	"encoding/json"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
 	"munchkin-tracker-server/internal/models"
 )
+
+const maxChangeLogEntries = 100
 
 const ghostTimeout = 2 * time.Minute
 
@@ -27,6 +30,7 @@ type Room struct {
 	clients    map[Client]bool
 	sessionMap map[string]string      // sessionID -> playerID (active)
 	ghosts     map[string]*ghostEntry // sessionID -> ghost (disconnected)
+	changelog  []*models.ChangeLogEntry
 	mu         sync.RWMutex
 }
 
@@ -55,8 +59,16 @@ func (r *Room) AddClient(c Client, player *models.Player) {
 
 	r.clients[c] = true
 	r.players[player.ID] = player
+
+	entry := &models.ChangeLogEntry{
+		Timestamp:  time.Now().UnixMilli(),
+		PlayerName: player.Name,
+		EventType:  "join",
+	}
+	r.addChangeLogEntry(entry)
 	r.mu.Unlock()
 
+	r.broadcastChangeLogEntry(entry)
 	r.broadcastPlayerJoined(player)
 	r.sendRoomState(c)
 }
@@ -72,8 +84,21 @@ func (r *Room) RemoveClient(c Client) {
 	if player != nil && player.SessionID != "" {
 		delete(r.sessionMap, player.SessionID)
 	}
+
+	var entry *models.ChangeLogEntry
+	if player != nil {
+		entry = &models.ChangeLogEntry{
+			Timestamp:  time.Now().UnixMilli(),
+			PlayerName: player.Name,
+			EventType:  "leave",
+		}
+		r.addChangeLogEntry(entry)
+	}
 	r.mu.Unlock()
 
+	if entry != nil {
+		r.broadcastChangeLogEntry(entry)
+	}
 	r.broadcastPlayerLeft(playerID)
 }
 
@@ -131,11 +156,19 @@ func (r *Room) RejoinClient(c Client, sessionID string) (*models.Player, bool) {
 	r.clients[c] = true
 	r.players[player.ID] = player
 	r.sessionMap[sessionID] = player.ID
+
+	entry := &models.ChangeLogEntry{
+		Timestamp:  time.Now().UnixMilli(),
+		PlayerName: player.Name,
+		EventType:  "join",
+	}
+	r.addChangeLogEntry(entry)
 	r.mu.Unlock()
 
 	// Tell other clients to drop the ghost entry under the old player ID,
 	// then send the restored player as a fresh join so they add it under the new ID.
 	r.broadcastPlayerLeft(oldPlayerID)
+	r.broadcastChangeLogEntry(entry)
 	r.broadcastPlayerJoined(player)
 	r.sendRoomState(c)
 
@@ -153,8 +186,17 @@ func (r *Room) CancelGhost(sessionID string) {
 	if exists {
 		ghost.timer.Stop()
 		playerID := ghost.player.ID
+
+		entry := &models.ChangeLogEntry{
+			Timestamp:  time.Now().UnixMilli(),
+			PlayerName: ghost.player.Name,
+			EventType:  "leave",
+		}
+		r.addChangeLogEntry(entry)
+
 		delete(r.ghosts, sessionID)
 		r.mu.Unlock()
+		r.broadcastChangeLogEntry(entry)
 		r.broadcastPlayerLeft(playerID)
 		return
 	}
@@ -163,25 +205,101 @@ func (r *Room) CancelGhost(sessionID string) {
 
 func (r *Room) expireGhost(sessionID string, playerID string) {
 	r.mu.Lock()
-	_, exists := r.ghosts[sessionID]
+	ghost, exists := r.ghosts[sessionID]
 	if !exists {
 		r.mu.Unlock()
 		return
 	}
+
+	entry := &models.ChangeLogEntry{
+		Timestamp:  time.Now().UnixMilli(),
+		PlayerName: ghost.player.Name,
+		EventType:  "leave",
+	}
+	r.addChangeLogEntry(entry)
+
 	delete(r.ghosts, sessionID)
 	r.mu.Unlock()
 
 	log.Printf("ghost expired for session %s", sessionID)
+	r.broadcastChangeLogEntry(entry)
 	r.broadcastPlayerLeft(playerID)
 }
 
 func (r *Room) UpdatePlayer(player *models.Player) {
 	r.mu.Lock()
-	if _, ok := r.players[player.ID]; ok {
-		r.players[player.ID] = player
+	old, ok := r.players[player.ID]
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+
+	var entries []*models.ChangeLogEntry
+	now := time.Now().UnixMilli()
+
+	if old.Level != player.Level {
+		entries = append(entries, &models.ChangeLogEntry{
+			Timestamp:  now,
+			PlayerName: old.Name,
+			EventType:  "stat_change",
+			Field:      "level",
+			OldValue:   strconv.Itoa(old.Level),
+			NewValue:   strconv.Itoa(player.Level),
+		})
+	}
+	if old.GearBonus != player.GearBonus {
+		entries = append(entries, &models.ChangeLogEntry{
+			Timestamp:  now,
+			PlayerName: old.Name,
+			EventType:  "stat_change",
+			Field:      "gearBonus",
+			OldValue:   strconv.Itoa(old.GearBonus),
+			NewValue:   strconv.Itoa(player.GearBonus),
+		})
+	}
+	if old.Gender != player.Gender {
+		entries = append(entries, &models.ChangeLogEntry{
+			Timestamp:  now,
+			PlayerName: old.Name,
+			EventType:  "stat_change",
+			Field:      "gender",
+			OldValue:   old.Gender,
+			NewValue:   player.Gender,
+		})
+	}
+	if old.Race != player.Race {
+		entries = append(entries, &models.ChangeLogEntry{
+			Timestamp:  now,
+			PlayerName: old.Name,
+			EventType:  "stat_change",
+			Field:      "race",
+			OldValue:   old.Race,
+			NewValue:   player.Race,
+		})
+	}
+	if old.Class != player.Class {
+		entries = append(entries, &models.ChangeLogEntry{
+			Timestamp:  now,
+			PlayerName: old.Name,
+			EventType:  "stat_change",
+			Field:      "class",
+			OldValue:   old.Class,
+			NewValue:   player.Class,
+		})
+	}
+
+	// Preserve the name from existing player (client doesn't change it)
+	player.Name = old.Name
+	r.players[player.ID] = player
+
+	for _, e := range entries {
+		r.addChangeLogEntry(e)
 	}
 	r.mu.Unlock()
 
+	for _, e := range entries {
+		r.broadcastChangeLogEntry(e)
+	}
 	r.broadcastPlayerUpdated(player)
 }
 
@@ -207,12 +325,16 @@ func (r *Room) sendRoomState(c Client) {
 	for _, g := range r.ghosts {
 		players = append(players, g.player)
 	}
+	// Copy changelog for serialization outside the lock
+	changeLog := make([]*models.ChangeLogEntry, len(r.changelog))
+	copy(changeLog, r.changelog)
 	r.mu.RUnlock()
 
 	msg := models.OutgoingMessage{
-		Type:     "room_state",
-		RoomCode: r.Code,
-		Players:  players,
+		Type:      "room_state",
+		RoomCode:  r.Code,
+		Players:   players,
+		ChangeLog: changeLog,
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -220,6 +342,22 @@ func (r *Room) sendRoomState(c Client) {
 		return
 	}
 	c.Send(data)
+}
+
+// addChangeLogEntry appends an entry to the in-memory changelog (must be called under r.mu.Lock).
+func (r *Room) addChangeLogEntry(entry *models.ChangeLogEntry) {
+	r.changelog = append(r.changelog, entry)
+	if len(r.changelog) > maxChangeLogEntries {
+		r.changelog = r.changelog[len(r.changelog)-maxChangeLogEntries:]
+	}
+}
+
+func (r *Room) broadcastChangeLogEntry(entry *models.ChangeLogEntry) {
+	msg := models.OutgoingMessage{
+		Type:           "changelog_entry",
+		ChangeLogEntry: entry,
+	}
+	r.broadcast(msg)
 }
 
 func (r *Room) broadcastPlayerJoined(player *models.Player) {

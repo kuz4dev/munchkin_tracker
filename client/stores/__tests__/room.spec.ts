@@ -312,5 +312,111 @@ describe('useRoomStore', () => {
       expect(store.playerId).toBe('')
       expect(store.allPlayers).toHaveLength(0)
     })
+
+    it('clears changelog on leave', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      handler({
+        type: 'room_state',
+        roomCode: 'ABC123',
+        players: [
+          { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+        ],
+        changeLog: [
+          { timestamp: 1000, playerName: 'Alice', eventType: 'join' },
+        ],
+      })
+
+      expect(store.changelog).toHaveLength(1)
+      store.leaveRoom()
+      expect(store.changelog).toHaveLength(0)
+    })
+  })
+
+  describe('changelog', () => {
+    it('loads changelog from room_state', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      handler({
+        type: 'room_state',
+        roomCode: 'ABC123',
+        players: [
+          { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+        ],
+        changeLog: [
+          { timestamp: 1000, playerName: 'Alice', eventType: 'join' },
+          { timestamp: 2000, playerName: 'Alice', eventType: 'stat_change', field: 'level', oldValue: '1', newValue: '3' },
+        ],
+      })
+
+      expect(store.changelog).toHaveLength(2)
+      expect(store.changelog[0]!.eventType).toBe('join')
+      expect(store.changelog[1]!.field).toBe('level')
+    })
+
+    it('handles room_state without changeLog (backward compat)', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      handler({
+        type: 'room_state',
+        roomCode: 'ABC123',
+        players: [
+          { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+        ],
+      })
+
+      expect(store.changelog).toHaveLength(0)
+    })
+
+    it('handles changelog_entry message', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      handler({
+        type: 'changelog_entry',
+        changeLogEntry: { timestamp: 1000, playerName: 'Alice', eventType: 'join' },
+      })
+
+      expect(store.changelog).toHaveLength(1)
+      expect(store.changelog[0]!.playerName).toBe('Alice')
+    })
+
+    it('caps changelog at 100 entries', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      // Load 99 entries via room_state
+      const entries = Array.from({ length: 99 }, (_, i) => ({
+        timestamp: i,
+        playerName: 'Alice',
+        eventType: 'join' as const,
+      }))
+
+      handler({
+        type: 'room_state',
+        roomCode: 'ABC123',
+        players: [
+          { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+        ],
+        changeLog: entries,
+      })
+
+      // Add 2 more via changelog_entry to exceed 100
+      handler({
+        type: 'changelog_entry',
+        changeLogEntry: { timestamp: 100, playerName: 'Bob', eventType: 'join' },
+      })
+      handler({
+        type: 'changelog_entry',
+        changeLogEntry: { timestamp: 101, playerName: 'Charlie', eventType: 'join' },
+      })
+
+      expect(store.changelog).toHaveLength(100)
+      // Oldest entry should be trimmed
+      expect(store.changelog[0]!.timestamp).toBe(1)
+    })
   })
 })
