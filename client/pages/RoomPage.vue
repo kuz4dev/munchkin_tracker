@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useClipboard } from '@vueuse/core'
 import { useRoomStore } from '@/stores/room'
 import RoomHeader from '@/components/RoomHeader.vue'
 import StatsEditor from '@/components/StatsEditor.vue'
@@ -8,6 +9,7 @@ import PlayerCard from '@/components/PlayerCard.vue'
 
 const router = useRouter()
 const roomStore = useRoomStore()
+const { copy } = useClipboard()
 
 if (!roomStore.roomCode) {
   router.replace({ name: 'home' })
@@ -18,7 +20,7 @@ onUnmounted(() => {
 })
 
 function copyRoomCode() {
-  navigator.clipboard.writeText(roomStore.roomCode)
+  copy(roomStore.roomCode)
 }
 </script>
 

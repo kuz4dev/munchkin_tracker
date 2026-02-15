@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoomStore } from '@/stores/room'
-import { CLASSES, GENDERS, RACES } from '@/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { usePlayerStats } from '@/composables/usePlayerStats'
+import { CLASSES, GENDERS, RACES } from '@/constants'
+import type { Player } from '@/types'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -14,35 +14,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-const roomStore = useRoomStore()
+const { player, power, changeLevel, changeGear, updateAttribute } = usePlayerStats()
 
-const player = computed(() => roomStore.currentPlayer)
-const power = computed(() =>
-  player.value ? player.value.level + player.value.gearBonus : 0,
-)
-
-function changeLevel(delta: number) {
-  if (!player.value) return
-  const newLevel = Math.max(1, Math.min(10, player.value.level + delta))
-  roomStore.updateStats({ level: newLevel })
-}
-
-function changeGear(delta: number) {
-  if (!player.value) return
-  const newGear = Math.max(0, player.value.gearBonus + delta)
-  roomStore.updateStats({ gearBonus: newGear })
-}
-
-function updateGender(value: string | number | bigint | Record<string, any> | null) {
-  if (typeof value === 'string') roomStore.updateStats({ gender: value as 'male' | 'female' })
-}
-
-function updateRace(value: string | number | bigint | Record<string, any> | null) {
-  if (typeof value === 'string') roomStore.updateStats({ race: value as 'human' | 'elf' | 'dwarf' | 'halfling' })
-}
-
-function updateClass(value: string | number | bigint | Record<string, any> | null) {
-  if (typeof value === 'string') roomStore.updateStats({ class: value as 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric' })
+function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
+  if (typeof value === 'string') updateAttribute(key, value as Player[K])
 }
 </script>
 
@@ -128,7 +103,7 @@ function updateClass(value: string | number | bigint | Record<string, any> | nul
         <!-- Gender -->
         <div class="space-y-1.5">
           <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Пол</Label>
-          <Select :model-value="player.gender" @update:model-value="updateGender">
+          <Select :model-value="player.gender" @update:model-value="(v) => onSelectUpdate('gender', v)">
             <SelectTrigger class="h-11">
               <SelectValue />
             </SelectTrigger>
@@ -143,7 +118,7 @@ function updateClass(value: string | number | bigint | Record<string, any> | nul
         <!-- Race -->
         <div class="space-y-1.5">
           <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Раса</Label>
-          <Select :model-value="player.race" @update:model-value="updateRace">
+          <Select :model-value="player.race" @update:model-value="(v) => onSelectUpdate('race', v)">
             <SelectTrigger class="h-11">
               <SelectValue />
             </SelectTrigger>
@@ -158,7 +133,7 @@ function updateClass(value: string | number | bigint | Record<string, any> | nul
         <!-- Class -->
         <div class="space-y-1.5">
           <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Класс</Label>
-          <Select :model-value="player.class" @update:model-value="updateClass">
+          <Select :model-value="player.class" @update:model-value="(v) => onSelectUpdate('class', v)">
             <SelectTrigger class="h-11">
               <SelectValue />
             </SelectTrigger>

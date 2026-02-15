@@ -1,17 +1,18 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { useWebSocket } from '@/composables/useWebSocket'
+import { useConnectionStore } from './connection'
+import { createRoom as apiCreateRoom } from '@/services/roomApi'
 import type { Player, ServerMessage } from '@/types'
 
 export const useRoomStore = defineStore('room', () => {
+  const connection = useConnectionStore()
+
   const roomCode = ref('')
   const playerId = ref('')
   const playerName = ref('')
   const players = reactive(new Map<string, Player>())
 
-  const ws = useWebSocket()
-
-  const connected = computed(() => ws.status.value === 'connected')
+  const connected = computed(() => connection.isConnected)
   const currentPlayer = computed(() => players.get(playerId.value))
   const otherPlayers = computed(() => {
     const result: Player[] = []
@@ -24,18 +25,17 @@ export const useRoomStore = defineStore('room', () => {
   })
   const allPlayers = computed(() => Array.from(players.values()))
 
-  ws.onMessage(handleMessage)
+  connection.onMessage(handleMessage)
 
   function handleMessage(msg: ServerMessage) {
     switch (msg.type) {
       case 'room_state': {
         players.clear()
-        const list = msg.players
-        for (const p of list) {
+        for (const p of msg.players) {
           players.set(p.id, p)
         }
-        if (list.length > 0 && !playerId.value) {
-          playerId.value = list[list.length - 1]!.id
+        if (msg.players.length > 0 && !playerId.value) {
+          playerId.value = msg.players[msg.players.length - 1]!.id
         }
         break
       }
@@ -59,15 +59,13 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   async function createRoom(name: string): Promise<string> {
-    const res = await fetch('/api/rooms', { method: 'POST' })
-    const data = await res.json()
-    const code = data.code as string
+    const data = await apiCreateRoom()
 
     playerName.value = name
-    roomCode.value = code
-    connectToRoom(code, name)
+    roomCode.value = data.code
+    await connectToRoom(data.code, name)
 
-    return code
+    return data.code
   }
 
   function joinRoom(code: string, name: string) {
@@ -76,22 +74,14 @@ export const useRoomStore = defineStore('room', () => {
     connectToRoom(code, name)
   }
 
-  function connectToRoom(code: string, name: string) {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws`
-
-    ws.connect(wsUrl)
-
-    const unwatch = setInterval(() => {
-      if (ws.status.value === 'connected') {
-        clearInterval(unwatch)
-        ws.send({
-          type: 'join_room',
-          roomCode: code,
-          playerName: name,
-        })
-      }
-    }, 50)
+  async function connectToRoom(code: string, name: string) {
+    connection.connect()
+    await connection.waitForConnection()
+    connection.send({
+      type: 'join_room',
+      roomCode: code,
+      playerName: name,
+    })
   }
 
   function updateStats(stats: Partial<Player>) {
@@ -101,15 +91,15 @@ export const useRoomStore = defineStore('room', () => {
     const updated: Player = { ...current, ...stats }
     players.set(playerId.value, updated)
 
-    ws.send({
+    connection.send({
       type: 'update_stats',
       player: updated,
     })
   }
 
   function leaveRoom() {
-    ws.send({ type: 'leave_room' })
-    ws.disconnect()
+    connection.send({ type: 'leave_room' })
+    connection.disconnect()
     players.clear()
     roomCode.value = ''
     playerId.value = ''

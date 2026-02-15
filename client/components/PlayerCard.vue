@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import type { Player } from '@/types'
-import { CLASSES, GENDERS, RACES } from '@/types'
+import { CLASSES, GENDERS, RACES } from '@/constants'
+import { getLabel } from '@/lib/labels'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 defineProps<{
   player: Player
 }>()
-
-function getLabel(list: { value: string; label: string }[], value: string): string {
-  return list.find((item) => item.value === value)?.label ?? value
-}
 </script>
 
 <template>

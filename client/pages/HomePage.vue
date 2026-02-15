@@ -1,54 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useRoomStore } from '@/stores/room'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useRoomForm } from '@/composables/useRoomForm'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 
-const router = useRouter()
-const roomStore = useRoomStore()
-
-const playerName = ref('')
-const roomCodeInput = ref('')
-const loading = ref(false)
-const error = ref('')
-
-async function handleCreate() {
-  if (!playerName.value.trim()) {
-    error.value = 'Введите ваше имя'
-    return
-  }
-
-  loading.value = true
-  error.value = ''
-  try {
-    const code = await roomStore.createRoom(playerName.value.trim())
-    router.push({ name: 'room', params: { code } })
-  } catch (e) {
-    error.value = 'Не удалось создать комнату'
-  } finally {
-    loading.value = false
-  }
-}
-
-function handleJoin() {
-  if (!playerName.value.trim()) {
-    error.value = 'Введите ваше имя'
-    return
-  }
-  if (!roomCodeInput.value.trim()) {
-    error.value = 'Введите код комнаты'
-    return
-  }
-
-  error.value = ''
-  const code = roomCodeInput.value.trim().toUpperCase()
-  roomStore.joinRoom(code, playerName.value.trim())
-  router.push({ name: 'room', params: { code } })
-}
+const { playerName, roomCodeInput, loading, error, handleCreate, handleJoin } = useRoomForm()
 </script>
 
 <template>

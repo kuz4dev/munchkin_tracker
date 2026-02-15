@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useClipboard } from '@vueuse/core'
 import { useRoomStore } from '@/stores/room'
 import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const roomStore = useRoomStore()
-
-const copied = ref(false)
+const { copy, copied } = useClipboard({ copiedDuring: 2000 })
 
 function copyCode() {
-  navigator.clipboard.writeText(roomStore.roomCode)
-  copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+  copy(roomStore.roomCode)
 }
 
 function leave() {
