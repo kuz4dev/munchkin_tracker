@@ -2,6 +2,7 @@ package models
 
 type Player struct {
 	ID        string `json:"id"`
+	SessionID string `json:"sessionId,omitempty"`
 	Name      string `json:"name"`
 	Level     int    `json:"level"`
 	GearBonus int    `json:"gearBonus"`
@@ -25,6 +26,7 @@ type IncomingMessage struct {
 	Type       string  `json:"type"`
 	RoomCode   string  `json:"roomCode,omitempty"`
 	PlayerName string  `json:"playerName,omitempty"`
+	SessionID  string  `json:"sessionId,omitempty"`
 	Player     *Player `json:"player,omitempty"`
 }
 

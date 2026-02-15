@@ -142,7 +142,7 @@ describe('useRoomStore', () => {
       expect(store.allPlayers[0]!.name).toBe('Bob')
     })
 
-    it('handles player_updated message', () => {
+    it('handles player_updated message for other players', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()
 
@@ -151,16 +151,42 @@ describe('useRoomStore', () => {
         roomCode: 'ABC123',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+          { id: 'p2', name: 'Bob', level: 1, gearBonus: 0, gender: 'male', race: 'human', class: 'none' },
         ],
       })
 
+      // p2 is the current player (last in list), so p1 update should apply
       handler({
         type: 'player_updated',
         player: { id: 'p1', name: 'Alice', level: 5, gearBonus: 3, gender: 'female', race: 'elf', class: 'wizard' },
       })
 
-      expect(store.allPlayers[0]!.level).toBe(5)
-      expect(store.allPlayers[0]!.gearBonus).toBe(3)
+      const alice = store.players.get('p1')
+      expect(alice!.level).toBe(5)
+      expect(alice!.gearBonus).toBe(3)
+    })
+
+    it('ignores player_updated for own player (optimistic update)', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+
+      handler({
+        type: 'room_state',
+        roomCode: 'ABC123',
+        players: [
+          { id: 'p1', name: 'Alice', level: 3, gearBonus: 2, gender: 'female', race: 'elf', class: 'wizard' },
+        ],
+      })
+
+      // p1 is current player, server update should be ignored
+      handler({
+        type: 'player_updated',
+        player: { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+      })
+
+      const alice = store.players.get('p1')
+      expect(alice!.level).toBe(3)
+      expect(alice!.gearBonus).toBe(2)
     })
 
     it('handles error message', () => {

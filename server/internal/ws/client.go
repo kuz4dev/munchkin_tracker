@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"munchkin-tracker-server/internal/models"
@@ -19,11 +20,12 @@ const (
 )
 
 type Client struct {
-	id       string
-	conn     *websocket.Conn
-	send     chan []byte
-	room     *room.Room
-	manager  *room.Manager
+	id        string
+	sessionID string
+	conn      *websocket.Conn
+	send      chan []byte
+	room      *room.Room
+	manager   *room.Manager
 }
 
 func NewClient(id string, conn *websocket.Conn, manager *room.Manager) *Client {
@@ -50,7 +52,7 @@ func (c *Client) Send(data []byte) {
 func (c *Client) ReadPump() {
 	defer func() {
 		if c.room != nil {
-			c.room.RemoveClient(c)
+			c.room.DisconnectClient(c, c.sessionID)
 			if c.room.IsEmpty() {
 				c.manager.RemoveRoom(c.room.Code)
 				log.Printf("room %s removed (empty)", c.room.Code)
@@ -137,8 +139,32 @@ func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
 		return
 	}
 
+	c.room = r
+
+	// Attempt rejoin if sessionID provided
+	if msg.SessionID != "" {
+		c.sessionID = msg.SessionID
+		player, ok := r.RejoinClient(c, msg.SessionID)
+		if ok {
+			log.Printf("player %s (%s) rejoined room %s", player.Name, c.id, r.Code)
+			return
+		}
+		// Ghost expired or never existed — clean up any stale ghost and fall through to fresh join
+		r.CancelGhost(msg.SessionID)
+	}
+
+	// Generate sessionID if not provided
+	if c.sessionID == "" {
+		if msg.SessionID != "" {
+			c.sessionID = msg.SessionID
+		} else {
+			c.sessionID = uuid.New().String()
+		}
+	}
+
 	player := &models.Player{
 		ID:        c.id,
+		SessionID: c.sessionID,
 		Name:      msg.PlayerName,
 		Level:     1,
 		GearBonus: 0,
@@ -147,7 +173,6 @@ func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
 		Class:     "none",
 	}
 
-	c.room = r
 	r.AddClient(c, player)
 	log.Printf("player %s (%s) joined room %s", player.Name, c.id, r.Code)
 }
@@ -171,11 +196,13 @@ func (c *Client) handleLeaveRoom() {
 		return
 	}
 	c.room.RemoveClient(c)
+	c.room.CancelGhost(c.sessionID)
 	if c.room.IsEmpty() {
 		c.manager.RemoveRoom(c.room.Code)
 		log.Printf("room %s removed (empty)", c.room.Code)
 	}
 	c.room = nil
+	c.sessionID = ""
 }
 
 func (c *Client) sendError(message string) {

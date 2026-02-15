@@ -1,5 +1,6 @@
 export interface Player {
   id: string
+  sessionId?: string
   name: string
   level: number
   gearBonus: number
@@ -52,6 +53,7 @@ export interface OutgoingJoinMessage {
   type: 'join_room'
   roomCode: string
   playerName: string
+  sessionId?: string
 }
 
 export interface OutgoingUpdateMessage {
