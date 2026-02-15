@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: munchkin-tracker-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://munchkin.pages.dev

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, watch } from 'vue'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { getWsUrl } from '@/services/config'
 import type { ClientMessage, ServerMessage } from '@/types'
 
 export const useConnectionStore = defineStore('connection', () => {
@@ -10,9 +11,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const status = computed(() => ws.status.value)
 
   function connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws`
-    ws.connect(wsUrl)
+    ws.connect(getWsUrl())
   }
 
   function disconnect() {
