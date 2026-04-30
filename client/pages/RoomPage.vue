@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { Swords } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 import { useClipboard } from '@vueuse/core'
 import { useRoomStore } from '@/stores/room'
@@ -9,6 +10,16 @@ import RoomHeader from '@/components/RoomHeader.vue'
 import StatsEditor from '@/components/StatsEditor.vue'
 import PlayerCard from '@/components/PlayerCard.vue'
 import ChangeLog from '@/components/ChangeLog.vue'
+import CombatMode from '@/components/CombatMode.vue'
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,6 +27,7 @@ const roomStore = useRoomStore()
 const { copy } = useClipboard()
 
 const rejoining = ref(false)
+const combatOpen = ref(false)
 
 if (!roomStore.roomCode) {
   // Not in a room from normal flow — try session restore
@@ -76,6 +88,23 @@ function copyRoomCode() {
 
         <!-- Change Log -->
         <ChangeLog />
+
+        <!-- Combat Mode Dialog -->
+        <Dialog v-model:open="combatOpen">
+          <DialogTrigger as-child>
+            <Button variant="outline" class="w-full">
+              <Swords class="size-4" />
+              Режим боя
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogClose />
+            <DialogHeader>
+              <DialogTitle>⚔️ Режим боя</DialogTitle>
+            </DialogHeader>
+            <CombatMode :open="combatOpen" />
+          </DialogContent>
+        </Dialog>
 
         <!-- Other players -->
         <section v-if="roomStore.otherPlayers.length > 0">

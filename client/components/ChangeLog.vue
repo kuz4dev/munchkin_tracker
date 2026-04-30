@@ -148,7 +148,7 @@ const totalEntries = computed(() => roomStore.changelog.length)
           class="w-full flex items-center justify-between px-4 py-3 h-auto"
         >
           <div class="flex items-center gap-2">
-            <span class="text-base font-bold">📋 Журнал</span>
+            <span class="text-base font-bold">Журнал</span>
             <span
               v-if="totalEntries > 0"
               class="text-xs text-muted-foreground bg-secondary rounded-full px-2 py-0.5"
