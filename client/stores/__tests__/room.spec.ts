@@ -602,6 +602,17 @@ describe('useRoomStore', () => {
       }
     })
 
+    it('joining a full room shows a notice', () => {
+      const store = useRoomStore()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      store.roomCode = 'ABC123'
+
+      getMessageHandler()({ type: 'error', message: 'room is full' })
+
+      expect(store.roomCode).toBe('')
+      expect(store.notice).toBe('В комнате уже максимум игроков')
+    })
+
     it('ignores "game finished" errors while in the room', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()

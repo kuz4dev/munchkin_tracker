@@ -10,6 +10,7 @@ const ERR_ROOM_NOT_FOUND = 'room not found'
 const ERR_SESSION_REPLACED = 'session replaced'
 const ERR_GAME_FINISHED = 'game finished'
 const ERR_UNAVAILABLE = 'temporarily unavailable'
+const ERR_ROOM_FULL = 'room is full'
 const JOIN_RETRY_DELAY = 2000
 
 /** Max changelog entries kept on the client (live + loaded history) */
@@ -123,6 +124,10 @@ export const useRoomStore = defineStore('room', () => {
         if (msg.message === ERR_UNAVAILABLE && roomCode.value && !playerId.value) {
           // The server couldn't load the game (database hiccup): try again
           scheduleJoinRetry()
+        } else if (msg.message === ERR_ROOM_FULL && roomCode.value && !playerId.value) {
+          clearSession()
+          resetState()
+          notice.value = 'В комнате уже максимум игроков'
         } else if (msg.message === ERR_GAME_FINISHED && roomCode.value && !playerId.value) {
           // Tried to join a game that is already over
           clearSession()
