@@ -36,6 +36,14 @@ frontend:test:
 backend:test:
   stage: test
   image: golang:${GO_VERSION}-alpine
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: munchkin
+    POSTGRES_PASSWORD: munchkin
+    POSTGRES_DB: munchkin_test
+    TEST_DATABASE_URL: postgres://munchkin:munchkin@postgres:5432/munchkin_test
   script:
     - cd server
     - go vet ./...

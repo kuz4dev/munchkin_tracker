@@ -5,6 +5,11 @@ services:
     dockerfilePath: ./server/Dockerfile
     dockerContext: ./server
     plan: free
+    healthCheckPath: /healthz
     envVars:
       - key: ALLOWED_ORIGINS
         value: https://munchkin.pages.dev
+      # Postgres connection string (e.g. from Neon). Set in the Render dashboard.
+      # Without it the server keeps games in memory only.
+      - key: DATABASE_URL
+        sync: false
