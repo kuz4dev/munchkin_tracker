@@ -1,0 +1,48 @@
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - client/**
+      - e2e/**
+      - package.json
+      - package-lock.json
+      - vite.config.ts
+      - vitest.config.ts
+      - tsconfig*.json
+      - eslint.config.ts
+      - .oxlintrc.json
+      - .github/workflows/frontend.yml
+  pull_request:
+    paths:
+      - client/**
+      - e2e/**
+      - package.json
+      - package-lock.json
+      - vite.config.ts
+      - vitest.config.ts
+      - tsconfig*.json
+      - eslint.config.ts
+      - .oxlintrc.json
+      - .github/workflows/frontend.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run type-check
+      - run: npx oxlint .
+      - run: npx eslint .
+      - run: npx vitest run
+      - run: npm run build-only

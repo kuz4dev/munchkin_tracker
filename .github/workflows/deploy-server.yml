@@ -1,0 +1,40 @@
+# Deploys the API to Render. Runs automatically from the Backend workflow
+# after tests pass on main; can also be run by hand (Actions → Deploy server →
+# Run workflow) to redeploy.
+#
+# Requires the RENDER_DEPLOY_HOOK_URL repository secret (Render dashboard →
+# service → Settings → Deploy Hook).
+name: Deploy server
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      RENDER_DEPLOY_HOOK_URL:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Deploys queue up instead of overlapping
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            # Until Render is connected, automatic deploys are a no-op;
+            # an explicit manual run should still fail loudly.
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              echo "::error::RENDER_DEPLOY_HOOK_URL secret is not set"
+              exit 1
+            fi
+            echo "::notice::RENDER_DEPLOY_HOOK_URL secret is not set, skipping deploy"
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "Deploy triggered"
