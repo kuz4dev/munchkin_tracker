@@ -40,3 +40,11 @@ __screenshots__/
 
 test-results/
 playwright-report/
+
+# Local secrets (e.g. DATABASE_URL)
+.env
+.env.*
+!.env.example
+
+# Personal Claude Code settings
+.claude/settings.local.json

@@ -13,6 +13,10 @@ on:
       RENDER_DEPLOY_HOOK_URL:
         required: false
 
+# The workflow token can only read the repository.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
