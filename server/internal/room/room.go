@@ -2,10 +2,13 @@ package room
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"munchkin-tracker-server/internal/models"
 )
@@ -13,6 +16,16 @@ import (
 const maxChangeLogEntries = 100
 
 const ghostTimeout = 2 * time.Minute
+
+// MsgSessionReplaced is sent to a connection whose session was taken over by
+// a newer connection (another tab, or a reconnect before the old socket died).
+const MsgSessionReplaced = "session replaced"
+
+var (
+	ErrRoomClosed    = errors.New("room not found")
+	ErrNotInRoom     = errors.New("not in a room")
+	ErrAlreadyInRoom = errors.New("already in a room")
+)
 
 type Client interface {
 	ID() string
@@ -24,327 +37,257 @@ type ghostEntry struct {
 	timer  *time.Timer
 }
 
+// Room holds the state of one game. All mutations and the broadcasts they
+// cause happen under mu, so every client observes events in the same order.
+// Client.Send must therefore never block.
 type Room struct {
 	Code       string
 	players    map[string]*models.Player // playerID -> Player (active)
-	clients    map[Client]bool
-	sessionMap map[string]string      // sessionID -> playerID (active)
-	ghosts     map[string]*ghostEntry // sessionID -> ghost (disconnected)
+	clients    map[string]Client         // playerID -> Client
+	sessionMap map[string]string         // sessionID -> playerID (active)
+	ghosts     map[string]*ghostEntry    // sessionID -> ghost (disconnected)
 	changelog  []*models.ChangeLogEntry
-	mu         sync.RWMutex
+	emptySince time.Time // zero while anyone (active or ghost) is in the room
+	closed     bool
+	mu         sync.Mutex
 }
 
 func NewRoom(code string) *Room {
 	return &Room{
 		Code:       code,
 		players:    make(map[string]*models.Player),
-		clients:    make(map[Client]bool),
+		clients:    make(map[string]Client),
 		sessionMap: make(map[string]string),
 		ghosts:     make(map[string]*ghostEntry),
+		emptySince: time.Now(),
 	}
 }
 
-func (r *Room) AddClient(c Client, player *models.Player) {
+// Join adds a client to the room. If sessionID matches a disconnected (ghost)
+// or still-active player, that player is restored with its stats; otherwise a
+// new player is created with a fresh server-generated session ID.
+func (r *Room) Join(c Client, name, sessionID string) (*models.Player, error) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	// If a player with the same sessionID already exists (e.g. ghost expired
-	// but the old entry was never cleaned up), remove the stale entry first
-	// to prevent duplicates on reconnect.
-	if player.SessionID != "" {
-		if oldPlayerID, exists := r.sessionMap[player.SessionID]; exists && oldPlayerID != player.ID {
-			delete(r.players, oldPlayerID)
+	if r.closed {
+		return nil, ErrRoomClosed
+	}
+	if _, exists := r.clients[c.ID()]; exists {
+		return nil, ErrAlreadyInRoom
+	}
+
+	if sessionID != "" {
+		if ghost, ok := r.ghosts[sessionID]; ok {
+			ghost.timer.Stop()
+			delete(r.ghosts, sessionID)
+			player := ghost.player
+			oldID := player.ID
+			r.attachLocked(c, player)
+
+			entry := r.newEntry(player.Name, "join")
+			r.addChangeLogEntry(entry)
+			r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_left", PlayerID: oldID})
+			r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_joined", Player: player})
+			r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+			r.sendRoomStateLocked(c, player)
+			return player, nil
 		}
-		r.sessionMap[player.SessionID] = player.ID
+
+		if oldID, ok := r.sessionMap[sessionID]; ok {
+			// Session is still active on another connection: move it here.
+			player := r.players[oldID]
+			if old := r.clients[oldID]; old != nil {
+				sendLocked(old, models.OutgoingMessage{Type: "error", Message: MsgSessionReplaced})
+			}
+			delete(r.clients, oldID)
+			delete(r.players, oldID)
+			r.attachLocked(c, player)
+
+			r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_left", PlayerID: oldID})
+			r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_joined", Player: player})
+			r.sendRoomStateLocked(c, player)
+			return player, nil
+		}
 	}
 
-	r.clients[c] = true
-	r.players[player.ID] = player
-
-	entry := &models.ChangeLogEntry{
-		Timestamp:  time.Now().UnixMilli(),
-		PlayerName: player.Name,
-		EventType:  "join",
+	player := &models.Player{
+		SessionID: uuid.NewString(),
+		Name:      name,
+		Stats:     models.DefaultStats(),
 	}
+	r.attachLocked(c, player)
+
+	entry := r.newEntry(player.Name, "join")
 	r.addChangeLogEntry(entry)
-	r.mu.Unlock()
-
-	r.broadcastChangeLogEntry(entry)
-	r.broadcastPlayerJoined(player)
-	r.sendRoomState(c)
+	r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_joined", Player: player})
+	r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	r.sendRoomStateLocked(c, player)
+	return player, nil
 }
 
-// RemoveClient removes a client and player immediately (explicit leave).
-func (r *Room) RemoveClient(c Client) {
-	r.mu.Lock()
-	delete(r.clients, c)
-	playerID := c.ID()
-	player := r.players[playerID]
-	delete(r.players, playerID)
-	// Clean up session map
-	if player != nil && player.SessionID != "" {
-		delete(r.sessionMap, player.SessionID)
-	}
-
-	var entry *models.ChangeLogEntry
-	if player != nil {
-		entry = &models.ChangeLogEntry{
-			Timestamp:  time.Now().UnixMilli(),
-			PlayerName: player.Name,
-			EventType:  "leave",
-		}
-		r.addChangeLogEntry(entry)
-	}
-	r.mu.Unlock()
-
-	if entry != nil {
-		r.broadcastChangeLogEntry(entry)
-	}
-	r.broadcastPlayerLeft(playerID)
-}
-
-// DisconnectClient moves a player to ghost state instead of removing.
-// Other players still see the ghost in room_state until the ghost expires.
-func (r *Room) DisconnectClient(c Client, sessionID string) {
-	r.mu.Lock()
-	delete(r.clients, c)
-	playerID := c.ID()
-	player := r.players[playerID]
-
-	if player != nil && sessionID != "" {
-		// Move to ghost state
-		delete(r.players, playerID)
-		delete(r.sessionMap, sessionID)
-
-		timer := time.AfterFunc(ghostTimeout, func() {
-			r.expireGhost(sessionID, playerID)
-		})
-		r.ghosts[sessionID] = &ghostEntry{
-			player: player,
-			timer:  timer,
-		}
-		r.mu.Unlock()
-		log.Printf("player %s moved to ghost state (session %s)", player.Name, sessionID)
-		return
-	}
-
-	// No session ID — immediate removal
-	delete(r.players, playerID)
-	r.mu.Unlock()
-	r.broadcastPlayerLeft(playerID)
-}
-
-// RejoinClient restores a ghost player to active state with a new client.
-func (r *Room) RejoinClient(c Client, sessionID string) (*models.Player, bool) {
-	r.mu.Lock()
-	ghost, exists := r.ghosts[sessionID]
-	if !exists {
-		r.mu.Unlock()
-		return nil, false
-	}
-
-	// Cancel the expiry timer
-	ghost.timer.Stop()
-	delete(r.ghosts, sessionID)
-
-	// Remember old ID so we can tell other clients to remove the stale entry
-	oldPlayerID := ghost.player.ID
-
-	// Restore player with new client ID
-	player := ghost.player
+// attachLocked binds player to client c (player ID becomes the client ID).
+func (r *Room) attachLocked(c Client, player *models.Player) {
 	player.ID = c.ID()
-
-	r.clients[c] = true
+	r.clients[player.ID] = c
 	r.players[player.ID] = player
-	r.sessionMap[sessionID] = player.ID
+	r.sessionMap[player.SessionID] = player.ID
+	r.updateEmptyLocked()
+}
 
-	entry := &models.ChangeLogEntry{
-		Timestamp:  time.Now().UnixMilli(),
-		PlayerName: player.Name,
-		EventType:  "join",
+// Leave removes the client's player immediately (explicit leave).
+func (r *Room) Leave(c Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.clients[c.ID()]; !ok {
+		return
 	}
+	player := r.players[c.ID()]
+	delete(r.clients, c.ID())
+	delete(r.players, c.ID())
+	delete(r.sessionMap, player.SessionID)
+	r.updateEmptyLocked()
+
+	entry := r.newEntry(player.Name, "leave")
 	r.addChangeLogEntry(entry)
-	r.mu.Unlock()
-
-	// Tell other clients to drop the ghost entry under the old player ID,
-	// then send the restored player as a fresh join so they add it under the new ID.
-	r.broadcastPlayerLeft(oldPlayerID)
-	r.broadcastChangeLogEntry(entry)
-	r.broadcastPlayerJoined(player)
-	r.sendRoomState(c)
-
-	return player, true
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	r.broadcastLocked(models.OutgoingMessage{Type: "player_left", PlayerID: player.ID})
 }
 
-// CancelGhost removes a ghost entry without broadcasting player_left.
-// Used when a player explicitly leaves after disconnect.
-func (r *Room) CancelGhost(sessionID string) {
-	if sessionID == "" {
-		return
-	}
+// Disconnect moves the client's player to ghost state. Other players still
+// see the ghost until it expires or the owner rejoins with its session ID.
+// It is a no-op for clients that already left or whose session was taken over.
+func (r *Room) Disconnect(c Client) {
 	r.mu.Lock()
-	ghost, exists := r.ghosts[sessionID]
-	if exists {
-		ghost.timer.Stop()
-		playerID := ghost.player.ID
+	defer r.mu.Unlock()
 
-		entry := &models.ChangeLogEntry{
-			Timestamp:  time.Now().UnixMilli(),
-			PlayerName: ghost.player.Name,
-			EventType:  "leave",
-		}
-		r.addChangeLogEntry(entry)
-
-		delete(r.ghosts, sessionID)
-		r.mu.Unlock()
-		r.broadcastChangeLogEntry(entry)
-		r.broadcastPlayerLeft(playerID)
+	if _, ok := r.clients[c.ID()]; !ok {
 		return
 	}
-	r.mu.Unlock()
+	player := r.players[c.ID()]
+	delete(r.clients, c.ID())
+	delete(r.players, c.ID())
+	delete(r.sessionMap, player.SessionID)
+
+	sessionID := player.SessionID
+	r.ghosts[sessionID] = &ghostEntry{
+		player: player,
+		timer: time.AfterFunc(ghostTimeout, func() {
+			r.expireGhost(sessionID)
+		}),
+	}
+	r.updateEmptyLocked()
+	log.Printf("player %s moved to ghost state in room %s", player.Name, r.Code)
 }
 
-func (r *Room) expireGhost(sessionID string, playerID string) {
+func (r *Room) expireGhost(sessionID string) {
 	r.mu.Lock()
-	ghost, exists := r.ghosts[sessionID]
-	if !exists {
-		r.mu.Unlock()
-		return
-	}
+	defer r.mu.Unlock()
 
-	entry := &models.ChangeLogEntry{
-		Timestamp:  time.Now().UnixMilli(),
-		PlayerName: ghost.player.Name,
-		EventType:  "leave",
-	}
-	r.addChangeLogEntry(entry)
-
-	delete(r.ghosts, sessionID)
-	r.mu.Unlock()
-
-	log.Printf("ghost expired for session %s", sessionID)
-	r.broadcastChangeLogEntry(entry)
-	r.broadcastPlayerLeft(playerID)
-}
-
-func (r *Room) UpdatePlayer(player *models.Player) {
-	r.mu.Lock()
-	old, ok := r.players[player.ID]
+	ghost, ok := r.ghosts[sessionID]
 	if !ok {
-		r.mu.Unlock()
 		return
 	}
+	delete(r.ghosts, sessionID)
+	r.updateEmptyLocked()
 
-	var entries []*models.ChangeLogEntry
+	entry := r.newEntry(ghost.player.Name, "leave")
+	r.addChangeLogEntry(entry)
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	r.broadcastLocked(models.OutgoingMessage{Type: "player_left", PlayerID: ghost.player.ID})
+	log.Printf("ghost %s expired in room %s", ghost.player.Name, r.Code)
+}
+
+// UpdateStats validates and applies new stats for the client's own player.
+func (r *Room) UpdateStats(c Client, stats models.Stats) error {
+	if err := stats.Validate(); err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	player, ok := r.players[c.ID()]
+	if !ok {
+		return ErrNotInRoom
+	}
+
+	old := player.Stats
 	now := time.Now().UnixMilli()
+	var entries []*models.ChangeLogEntry
+	diff := func(field, oldValue, newValue string) {
+		if oldValue != newValue {
+			entries = append(entries, &models.ChangeLogEntry{
+				Timestamp:  now,
+				PlayerName: player.Name,
+				EventType:  "stat_change",
+				Field:      field,
+				OldValue:   oldValue,
+				NewValue:   newValue,
+			})
+		}
+	}
+	diff("level", strconv.Itoa(old.Level), strconv.Itoa(stats.Level))
+	diff("gearBonus", strconv.Itoa(old.GearBonus), strconv.Itoa(stats.GearBonus))
+	diff("gender", old.Gender, stats.Gender)
+	diff("race", old.Race, stats.Race)
+	diff("class", old.Class, stats.Class)
 
-	if old.Level != player.Level {
-		entries = append(entries, &models.ChangeLogEntry{
-			Timestamp:  now,
-			PlayerName: old.Name,
-			EventType:  "stat_change",
-			Field:      "level",
-			OldValue:   strconv.Itoa(old.Level),
-			NewValue:   strconv.Itoa(player.Level),
-		})
-	}
-	if old.GearBonus != player.GearBonus {
-		entries = append(entries, &models.ChangeLogEntry{
-			Timestamp:  now,
-			PlayerName: old.Name,
-			EventType:  "stat_change",
-			Field:      "gearBonus",
-			OldValue:   strconv.Itoa(old.GearBonus),
-			NewValue:   strconv.Itoa(player.GearBonus),
-		})
-	}
-	if old.Gender != player.Gender {
-		entries = append(entries, &models.ChangeLogEntry{
-			Timestamp:  now,
-			PlayerName: old.Name,
-			EventType:  "stat_change",
-			Field:      "gender",
-			OldValue:   old.Gender,
-			NewValue:   player.Gender,
-		})
-	}
-	if old.Race != player.Race {
-		entries = append(entries, &models.ChangeLogEntry{
-			Timestamp:  now,
-			PlayerName: old.Name,
-			EventType:  "stat_change",
-			Field:      "race",
-			OldValue:   old.Race,
-			NewValue:   player.Race,
-		})
-	}
-	if old.Class != player.Class {
-		entries = append(entries, &models.ChangeLogEntry{
-			Timestamp:  now,
-			PlayerName: old.Name,
-			EventType:  "stat_change",
-			Field:      "class",
-			OldValue:   old.Class,
-			NewValue:   player.Class,
-		})
+	if len(entries) == 0 {
+		return nil
 	}
 
-	// Preserve the name from existing player (client doesn't change it)
-	player.Name = old.Name
-	r.players[player.ID] = player
-
+	player.Stats = stats
 	for _, e := range entries {
 		r.addChangeLogEntry(e)
+		r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: e})
 	}
-	r.mu.Unlock()
-
-	for _, e := range entries {
-		r.broadcastChangeLogEntry(e)
-	}
-	r.broadcastPlayerUpdated(player)
+	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: player})
+	return nil
 }
 
 func (r *Room) PlayerCount() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return len(r.players) + len(r.ghosts)
 }
 
-func (r *Room) IsEmpty() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return len(r.clients) == 0 && len(r.ghosts) == 0
+// CloseIfIdle closes the room if nobody (active or ghost) has been in it for
+// at least ttl. A closed room rejects joins, so a client racing with cleanup
+// gets "room not found" instead of joining an orphaned room.
+func (r *Room) CloseIfIdle(now time.Time, ttl time.Duration) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return true
+	}
+	if r.emptySince.IsZero() || now.Sub(r.emptySince) < ttl {
+		return false
+	}
+	r.closed = true
+	return true
 }
 
-func (r *Room) sendRoomState(c Client) {
-	r.mu.RLock()
-	players := make([]*models.Player, 0, len(r.players)+len(r.ghosts))
-	for _, p := range r.players {
-		players = append(players, p)
+func (r *Room) updateEmptyLocked() {
+	if len(r.clients) == 0 && len(r.ghosts) == 0 {
+		if r.emptySince.IsZero() {
+			r.emptySince = time.Now()
+		}
+	} else {
+		r.emptySince = time.Time{}
 	}
-	// Include ghost players so other clients still see them
-	for _, g := range r.ghosts {
-		players = append(players, g.player)
-	}
-	// Copy changelog for serialization outside the lock
-	changeLog := make([]*models.ChangeLogEntry, len(r.changelog))
-	copy(changeLog, r.changelog)
-	r.mu.RUnlock()
-
-	msg := models.OutgoingMessage{
-		Type:      "room_state",
-		RoomCode:  r.Code,
-		Players:   players,
-		ChangeLog: changeLog,
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		log.Printf("error marshaling room_state: %v", err)
-		return
-	}
-	c.Send(data)
 }
 
-// addChangeLogEntry appends an entry to the in-memory changelog (must be called under r.mu.Lock).
+func (r *Room) newEntry(playerName, eventType string) *models.ChangeLogEntry {
+	return &models.ChangeLogEntry{
+		Timestamp:  time.Now().UnixMilli(),
+		PlayerName: playerName,
+		EventType:  eventType,
+	}
+}
+
+// addChangeLogEntry appends an entry to the in-memory changelog (must be called under r.mu).
 func (r *Room) addChangeLogEntry(entry *models.ChangeLogEntry) {
 	r.changelog = append(r.changelog, entry)
 	if len(r.changelog) > maxChangeLogEntries {
@@ -352,47 +295,49 @@ func (r *Room) addChangeLogEntry(entry *models.ChangeLogEntry) {
 	}
 }
 
-func (r *Room) broadcastChangeLogEntry(entry *models.ChangeLogEntry) {
-	msg := models.OutgoingMessage{
-		Type:           "changelog_entry",
-		ChangeLogEntry: entry,
+// sendRoomStateLocked sends the full room state to c, including the
+// recipient's own player ID and secret session ID.
+func (r *Room) sendRoomStateLocked(c Client, self *models.Player) {
+	players := make([]*models.Player, 0, len(r.players)+len(r.ghosts))
+	for _, p := range r.players {
+		players = append(players, p)
 	}
-	r.broadcast(msg)
+	for _, g := range r.ghosts {
+		players = append(players, g.player)
+	}
+	sendLocked(c, models.OutgoingMessage{
+		Type:      "room_state",
+		RoomCode:  r.Code,
+		Players:   players,
+		PlayerID:  self.ID,
+		SessionID: self.SessionID,
+		ChangeLog: r.changelog,
+	})
 }
 
-func (r *Room) broadcastPlayerJoined(player *models.Player) {
-	msg := models.OutgoingMessage{
-		Type:   "player_joined",
-		Player: player,
-	}
-	r.broadcast(msg)
+func (r *Room) broadcastLocked(msg models.OutgoingMessage) {
+	r.broadcastExceptLocked(nil, msg)
 }
 
-func (r *Room) broadcastPlayerLeft(playerID string) {
-	msg := models.OutgoingMessage{
-		Type:     "player_left",
-		PlayerID: playerID,
-	}
-	r.broadcast(msg)
-}
-
-func (r *Room) broadcastPlayerUpdated(player *models.Player) {
-	msg := models.OutgoingMessage{
-		Type:   "player_updated",
-		Player: player,
-	}
-	r.broadcast(msg)
-}
-
-func (r *Room) broadcast(msg models.OutgoingMessage) {
+func (r *Room) broadcastExceptLocked(except Client, msg models.OutgoingMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("error marshaling broadcast: %v", err)
+		log.Printf("error marshaling %s: %v", msg.Type, err)
 		return
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for c := range r.clients {
+	for id, c := range r.clients {
+		if except != nil && id == except.ID() {
+			continue
+		}
 		c.Send(data)
 	}
+}
+
+func sendLocked(c Client, msg models.OutgoingMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("error marshaling %s: %v", msg.Type, err)
+		return
+	}
+	c.Send(data)
 }

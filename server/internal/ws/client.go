@@ -3,9 +3,9 @@ package ws
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"munchkin-tracker-server/internal/models"
@@ -21,10 +21,11 @@ const (
 
 type Client struct {
 	id        string
-	sessionID string
 	conn      *websocket.Conn
 	send      chan []byte
-	room      *room.Room
+	done      chan struct{}
+	closeOnce sync.Once
+	room      *room.Room // only accessed from ReadPump goroutine
 	manager   *room.Manager
 }
 
@@ -33,6 +34,7 @@ func NewClient(id string, conn *websocket.Conn, manager *room.Manager) *Client {
 		id:      id,
 		conn:    conn,
 		send:    make(chan []byte, 256),
+		done:    make(chan struct{}),
 		manager: manager,
 	}
 }
@@ -41,24 +43,32 @@ func (c *Client) ID() string {
 	return c.id
 }
 
+// Send queues a message without blocking. A client that can't keep up is
+// disconnected: it will reconnect and receive a fresh room_state instead of
+// silently missing updates.
 func (c *Client) Send(data []byte) {
 	select {
 	case c.send <- data:
+	case <-c.done:
 	default:
-		log.Printf("client %s send buffer full, dropping message", c.id)
+		log.Printf("client %s send buffer full, closing connection", c.id)
+		c.close()
 	}
+}
+
+func (c *Client) close() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		c.conn.Close()
+	})
 }
 
 func (c *Client) ReadPump() {
 	defer func() {
 		if c.room != nil {
-			c.room.DisconnectClient(c, c.sessionID)
-			if c.room.IsEmpty() {
-				c.manager.RemoveRoom(c.room.Code)
-				log.Printf("room %s removed (empty)", c.room.Code)
-			}
+			c.room.Disconnect(c)
 		}
-		c.conn.Close()
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -84,17 +94,13 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.close()
 	}()
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case message := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
@@ -103,6 +109,8 @@ func (c *Client) WritePump() {
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
+		case <-c.done:
+			return
 		}
 	}
 }
@@ -123,94 +131,63 @@ func (c *Client) handleMessage(data []byte) {
 	case "leave_room":
 		c.handleLeaveRoom()
 	default:
-		c.sendError("unknown message type: " + msg.Type)
+		c.sendError("unknown message type")
 	}
 }
 
 func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
-	if msg.RoomCode == "" || msg.PlayerName == "" {
-		c.sendError("roomCode and playerName are required")
+	if c.room != nil {
+		c.sendError(room.ErrAlreadyInRoom.Error())
+		return
+	}
+	name, err := models.NormalizeName(msg.PlayerName)
+	if err != nil {
+		c.sendError(err.Error())
 		return
 	}
 
 	r := c.manager.GetRoom(msg.RoomCode)
 	if r == nil {
-		c.sendError("room not found")
+		c.sendError(room.ErrRoomClosed.Error())
 		return
 	}
 
+	player, err := r.Join(c, name, msg.SessionID)
+	if err != nil {
+		c.sendError(err.Error())
+		return
+	}
 	c.room = r
-
-	// Attempt rejoin if sessionID provided
-	if msg.SessionID != "" {
-		c.sessionID = msg.SessionID
-		player, ok := r.RejoinClient(c, msg.SessionID)
-		if ok {
-			log.Printf("player %s (%s) rejoined room %s", player.Name, c.id, r.Code)
-			return
-		}
-		// Ghost expired or never existed — clean up any stale ghost and fall through to fresh join
-		r.CancelGhost(msg.SessionID)
-	}
-
-	// Generate sessionID if not provided
-	if c.sessionID == "" {
-		if msg.SessionID != "" {
-			c.sessionID = msg.SessionID
-		} else {
-			c.sessionID = uuid.New().String()
-		}
-	}
-
-	player := &models.Player{
-		ID:        c.id,
-		SessionID: c.sessionID,
-		Name:      msg.PlayerName,
-		Level:     1,
-		GearBonus: 0,
-		Gender:    "male",
-		Race:      "human",
-		Class:     "none",
-	}
-
-	r.AddClient(c, player)
 	log.Printf("player %s (%s) joined room %s", player.Name, c.id, r.Code)
 }
 
 func (c *Client) handleUpdateStats(msg models.IncomingMessage) {
 	if c.room == nil {
-		c.sendError("not in a room")
+		c.sendError(room.ErrNotInRoom.Error())
 		return
 	}
 	if msg.Player == nil {
 		c.sendError("player data is required")
 		return
 	}
-
-	msg.Player.ID = c.id
-	c.room.UpdatePlayer(msg.Player)
+	if err := c.room.UpdateStats(c, *msg.Player); err != nil {
+		c.sendError(err.Error())
+	}
 }
 
 func (c *Client) handleLeaveRoom() {
 	if c.room == nil {
 		return
 	}
-	c.room.RemoveClient(c)
-	c.room.CancelGhost(c.sessionID)
-	if c.room.IsEmpty() {
-		c.manager.RemoveRoom(c.room.Code)
-		log.Printf("room %s removed (empty)", c.room.Code)
-	}
+	c.room.Leave(c)
 	c.room = nil
-	c.sessionID = ""
 }
 
 func (c *Client) sendError(message string) {
-	msg := models.OutgoingMessage{
+	data, err := json.Marshal(models.OutgoingMessage{
 		Type:    "error",
 		Message: message,
-	}
-	data, err := json.Marshal(msg)
+	})
 	if err != nil {
 		return
 	}

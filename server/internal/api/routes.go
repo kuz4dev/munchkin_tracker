@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -10,16 +12,25 @@ import (
 	"munchkin-tracker-server/internal/room"
 )
 
+const (
+	createRoomLimit  = 10
+	createRoomWindow = time.Minute
+)
+
 func RegisterRoutes(r chi.Router, manager *room.Manager) {
-	r.Post("/api/rooms", createRoom(manager))
+	limiter := newRateLimiter(createRoomLimit, createRoomWindow)
+	r.With(limiter.Middleware).Post("/api/rooms", createRoom(manager))
 	r.Get("/api/rooms/{code}", getRoomInfo(manager))
 }
 
 func createRoom(manager *room.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rm := manager.CreateRoom()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(models.RoomInfo{
+		rm, err := manager.CreateRoom()
+		if errors.Is(err, room.ErrTooManyRooms) {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, models.RoomInfo{
 			Code:        rm.Code,
 			PlayerCount: 0,
 		})
@@ -28,16 +39,24 @@ func createRoom(manager *room.Manager) http.HandlerFunc {
 
 func getRoomInfo(manager *room.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		code := chi.URLParam(r, "code")
-		rm := manager.GetRoom(code)
+		rm := manager.GetRoom(chi.URLParam(r, "code"))
 		if rm == nil {
-			http.Error(w, `{"error":"room not found"}`, http.StatusNotFound)
+			writeError(w, http.StatusNotFound, "room not found")
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(models.RoomInfo{
+		writeJSON(w, http.StatusOK, models.RoomInfo{
 			Code:        rm.Code,
 			PlayerCount: rm.PlayerCount(),
 		})
 	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
 }

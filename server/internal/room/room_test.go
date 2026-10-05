@@ -2,262 +2,376 @@ package room
 
 import (
 	"encoding/json"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"munchkin-tracker-server/internal/models"
 )
 
 type mockClient struct {
 	id       string
+	mu       sync.Mutex
 	messages [][]byte
 }
 
-func (m *mockClient) ID() string       { return m.id }
-func (m *mockClient) Send(data []byte) { m.messages = append(m.messages, data) }
-
-func newTestPlayer(id, name string) *models.Player {
-	return &models.Player{
-		ID:        id,
-		SessionID: "sess-" + id,
-		Name:      name,
-		Level:     1,
-		GearBonus: 0,
-		Gender:    "male",
-		Race:      "human",
-		Class:     "none",
-	}
+func (m *mockClient) ID() string { return m.id }
+func (m *mockClient) Send(data []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.messages = append(m.messages, data)
 }
 
-func TestAddClient_GeneratesJoinEntry(t *testing.T) {
-	r := NewRoom("TEST")
-	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
+func (m *mockClient) decoded() []models.OutgoingMessage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]models.OutgoingMessage, 0, len(m.messages))
+	for _, raw := range m.messages {
+		var msg models.OutgoingMessage
+		if err := json.Unmarshal(raw, &msg); err == nil {
+			out = append(out, msg)
+		}
+	}
+	return out
+}
 
-	r.AddClient(c, player)
+func (m *mockClient) last(msgType string) (models.OutgoingMessage, bool) {
+	msgs := m.decoded()
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Type == msgType {
+			return msgs[i], true
+		}
+	}
+	return models.OutgoingMessage{}, false
+}
+
+func (m *mockClient) reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.messages = nil
+}
+
+func mustJoin(t *testing.T, r *Room, c Client, name, sessionID string) *models.Player {
+	t.Helper()
+	p, err := r.Join(c, name, sessionID)
+	if err != nil {
+		t.Fatalf("join %s: %v", name, err)
+	}
+	return p
+}
+
+func stats(level, gear int, race string) models.Stats {
+	s := models.DefaultStats()
+	s.Level, s.GearBonus, s.Race = level, gear, race
+	return s
+}
+
+func TestJoin_GeneratesJoinEntry(t *testing.T) {
+	r := NewRoom("TEST")
+	mustJoin(t, r, &mockClient{id: "p1"}, "Alice", "")
 
 	if len(r.changelog) != 1 {
 		t.Fatalf("expected 1 changelog entry, got %d", len(r.changelog))
 	}
-
 	entry := r.changelog[0]
-	if entry.EventType != "join" {
-		t.Errorf("expected eventType 'join', got '%s'", entry.EventType)
-	}
-	if entry.PlayerName != "Alice" {
-		t.Errorf("expected playerName 'Alice', got '%s'", entry.PlayerName)
-	}
-	if entry.Timestamp == 0 {
-		t.Error("expected non-zero timestamp")
+	if entry.EventType != "join" || entry.PlayerName != "Alice" || entry.Timestamp == 0 {
+		t.Errorf("unexpected entry: %+v", entry)
 	}
 }
 
-func TestRemoveClient_GeneratesLeaveEntry(t *testing.T) {
+func TestJoin_RoomStateIdentifiesRecipient(t *testing.T) {
+	// Regression: the client used to guess its own ID as "the last player in
+	// room_state", but Go map iteration order is random.
 	r := NewRoom("TEST")
-	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Bob")
-
-	r.AddClient(c, player)
-	r.RemoveClient(c)
-
-	if len(r.changelog) != 2 {
-		t.Fatalf("expected 2 changelog entries (join + leave), got %d", len(r.changelog))
+	for _, id := range []string{"a", "b", "c", "d"} {
+		mustJoin(t, r, &mockClient{id: id}, "P-"+id, "")
 	}
+	newcomer := &mockClient{id: "z"}
+	p := mustJoin(t, r, newcomer, "Zed", "")
 
-	entry := r.changelog[1]
-	if entry.EventType != "leave" {
-		t.Errorf("expected eventType 'leave', got '%s'", entry.EventType)
+	state, ok := newcomer.last("room_state")
+	if !ok {
+		t.Fatal("no room_state sent")
 	}
-	if entry.PlayerName != "Bob" {
-		t.Errorf("expected playerName 'Bob', got '%s'", entry.PlayerName)
+	if state.PlayerID != "z" {
+		t.Errorf("expected playerId 'z', got %q", state.PlayerID)
+	}
+	if state.SessionID == "" || state.SessionID != p.SessionID {
+		t.Errorf("expected own sessionId in room_state, got %q", state.SessionID)
+	}
+	if len(state.Players) != 5 {
+		t.Errorf("expected 5 players, got %d", len(state.Players))
 	}
 }
 
-func TestUpdatePlayer_GeneratesDiffEntries(t *testing.T) {
+func TestSessionID_NeverBroadcast(t *testing.T) {
+	r := NewRoom("TEST")
+	alice := &mockClient{id: "p1"}
+	mustJoin(t, r, alice, "Alice", "")
+	bob := &mockClient{id: "p2"}
+	bobPlayer := mustJoin(t, r, bob, "Bob", "")
+	if err := r.UpdateStats(bob, stats(2, 0, "human")); err != nil {
+		t.Fatal(err)
+	}
+
+	alice.mu.Lock()
+	defer alice.mu.Unlock()
+	for _, raw := range alice.messages {
+		if strings.Contains(string(raw), bobPlayer.SessionID) {
+			t.Fatalf("Bob's session ID leaked to Alice: %s", raw)
+		}
+	}
+}
+
+func TestJoin_ClientSessionIDNotTrusted(t *testing.T) {
+	r := NewRoom("TEST")
+	p := mustJoin(t, r, &mockClient{id: "p1"}, "Alice", "attacker-chosen")
+	if p.SessionID == "attacker-chosen" {
+		t.Error("unknown client-supplied session ID must not be adopted")
+	}
+}
+
+func TestLeave_GeneratesLeaveEntry(t *testing.T) {
 	r := NewRoom("TEST")
 	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
-	r.AddClient(c, player)
+	mustJoin(t, r, c, "Bob", "")
+	r.Leave(c)
 
-	updated := &models.Player{
-		ID:        "p1",
-		Level:     3,
-		GearBonus: 0,
-		Gender:    "male",
-		Race:      "human",
-		Class:     "none",
+	if len(r.changelog) != 2 || r.changelog[1].EventType != "leave" || r.changelog[1].PlayerName != "Bob" {
+		t.Fatalf("unexpected changelog: %+v", r.changelog)
 	}
-	r.UpdatePlayer(updated)
+	if r.PlayerCount() != 0 {
+		t.Errorf("expected 0 players, got %d", r.PlayerCount())
+	}
+}
 
-	// 1 join + 1 level change = 2
+func TestDisconnect_GhostRejoinKeepsStats(t *testing.T) {
+	r := NewRoom("TEST")
+	alice := &mockClient{id: "p1"}
+	mustJoin(t, r, alice, "Alice", "")
+	bob := &mockClient{id: "p2"}
+	bobPlayer := mustJoin(t, r, bob, "Bob", "")
+	if err := r.UpdateStats(bob, stats(5, 3, "elf")); err != nil {
+		t.Fatal(err)
+	}
+
+	r.Disconnect(bob)
+	if r.PlayerCount() != 2 {
+		t.Fatalf("ghost should still count, got %d players", r.PlayerCount())
+	}
+
+	alice.reset()
+	bob2 := &mockClient{id: "p2-new"}
+	p := mustJoin(t, r, bob2, "ignored", bobPlayer.SessionID)
+
+	if p.Level != 5 || p.GearBonus != 3 || p.Race != "elf" || p.Name != "Bob" {
+		t.Errorf("stats not restored: %+v", p)
+	}
+	if left, ok := alice.last("player_left"); !ok || left.PlayerID != "p2" {
+		t.Errorf("Alice should be told to drop the old ID, got %+v", left)
+	}
+	if joined, ok := alice.last("player_joined"); !ok || joined.Player.ID != "p2-new" {
+		t.Errorf("Alice should see the new ID, got %+v", joined)
+	}
+	if state, _ := bob2.last("room_state"); state.PlayerID != "p2-new" {
+		t.Errorf("expected playerId p2-new, got %q", state.PlayerID)
+	}
+}
+
+func TestJoin_TakesOverActiveSession(t *testing.T) {
+	// Regression: reconnecting before the server noticed the old socket died
+	// (or opening a second tab) created a duplicate player at level 1.
+	r := NewRoom("TEST")
+	alice := &mockClient{id: "p1"}
+	mustJoin(t, r, alice, "Alice", "")
+	old := &mockClient{id: "p2"}
+	bob := mustJoin(t, r, old, "Bob", "")
+	if err := r.UpdateStats(old, stats(4, 0, "human")); err != nil {
+		t.Fatal(err)
+	}
+
+	alice.reset()
+	fresh := &mockClient{id: "p2-new"}
+	p := mustJoin(t, r, fresh, "Bob", bob.SessionID)
+
+	if p.Level != 4 {
+		t.Errorf("expected level 4 to be kept, got %d", p.Level)
+	}
+	if r.PlayerCount() != 2 {
+		t.Errorf("expected 2 players (no duplicate), got %d", r.PlayerCount())
+	}
+	if msg, ok := old.last("error"); !ok || msg.Message != MsgSessionReplaced {
+		t.Errorf("old connection should be told it was replaced, got %+v", msg)
+	}
+	if left, ok := alice.last("player_left"); !ok || left.PlayerID != "p2" {
+		t.Errorf("Alice should drop the old ID, got %+v", left)
+	}
+
+	// The old connection can no longer act, and its eventual disconnect is a no-op.
+	if err := r.UpdateStats(old, stats(9, 0, "human")); err != ErrNotInRoom {
+		t.Errorf("expected ErrNotInRoom for replaced connection, got %v", err)
+	}
+	r.Disconnect(old)
+	if r.PlayerCount() != 2 || len(r.ghosts) != 0 {
+		t.Errorf("stale disconnect must not create a ghost")
+	}
+}
+
+func TestJoin_SameClientTwice(t *testing.T) {
+	r := NewRoom("TEST")
+	c := &mockClient{id: "p1"}
+	mustJoin(t, r, c, "Alice", "")
+	if _, err := r.Join(c, "Alice", ""); err != ErrAlreadyInRoom {
+		t.Errorf("expected ErrAlreadyInRoom, got %v", err)
+	}
+}
+
+func TestUpdateStats_GeneratesDiffEntries(t *testing.T) {
+	r := NewRoom("TEST")
+	c := &mockClient{id: "p1"}
+	mustJoin(t, r, c, "Alice", "")
+
+	if err := r.UpdateStats(c, stats(3, 0, "human")); err != nil {
+		t.Fatal(err)
+	}
+
 	if len(r.changelog) != 2 {
 		t.Fatalf("expected 2 changelog entries, got %d", len(r.changelog))
 	}
-
 	entry := r.changelog[1]
-	if entry.EventType != "stat_change" {
-		t.Errorf("expected eventType 'stat_change', got '%s'", entry.EventType)
-	}
-	if entry.Field != "level" {
-		t.Errorf("expected field 'level', got '%s'", entry.Field)
-	}
-	if entry.OldValue != "1" {
-		t.Errorf("expected oldValue '1', got '%s'", entry.OldValue)
-	}
-	if entry.NewValue != "3" {
-		t.Errorf("expected newValue '3', got '%s'", entry.NewValue)
-	}
-	if entry.PlayerName != "Alice" {
-		t.Errorf("expected playerName 'Alice', got '%s'", entry.PlayerName)
+	if entry.EventType != "stat_change" || entry.Field != "level" ||
+		entry.OldValue != "1" || entry.NewValue != "3" || entry.PlayerName != "Alice" {
+		t.Errorf("unexpected entry: %+v", entry)
 	}
 }
 
-func TestUpdatePlayer_MultipleDiffs(t *testing.T) {
+func TestUpdateStats_MultipleDiffs(t *testing.T) {
 	r := NewRoom("TEST")
 	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
-	r.AddClient(c, player)
+	mustJoin(t, r, c, "Alice", "")
 
-	updated := &models.Player{
-		ID:        "p1",
-		Level:     5,
-		GearBonus: 2,
-		Gender:    "male",
-		Race:      "elf",
-		Class:     "none",
-	}
-	r.UpdatePlayer(updated)
-
-	// 1 join + 3 changes (level, gearBonus, race) = 4
-	if len(r.changelog) != 4 {
-		t.Fatalf("expected 4 changelog entries, got %d", len(r.changelog))
+	if err := r.UpdateStats(c, stats(5, 2, "elf")); err != nil {
+		t.Fatal(err)
 	}
 
 	fields := map[string]bool{}
 	for _, e := range r.changelog[1:] {
 		fields[e.Field] = true
 	}
-	for _, f := range []string{"level", "gearBonus", "race"} {
-		if !fields[f] {
-			t.Errorf("expected field '%s' in changelog entries", f)
-		}
+	if len(fields) != 3 || !fields["level"] || !fields["gearBonus"] || !fields["race"] {
+		t.Errorf("unexpected fields: %v", fields)
 	}
 }
 
-func TestUpdatePlayer_NoDiff_NoEntry(t *testing.T) {
+func TestUpdateStats_NoDiff_NoEntry(t *testing.T) {
 	r := NewRoom("TEST")
 	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
-	r.AddClient(c, player)
+	mustJoin(t, r, c, "Alice", "")
+	c.reset()
 
-	// Update with identical data
-	same := &models.Player{
-		ID:        "p1",
-		Level:     1,
-		GearBonus: 0,
-		Gender:    "male",
-		Race:      "human",
-		Class:     "none",
+	if err := r.UpdateStats(c, models.DefaultStats()); err != nil {
+		t.Fatal(err)
 	}
-	r.UpdatePlayer(same)
-
-	// Only the join entry
 	if len(r.changelog) != 1 {
-		t.Fatalf("expected 1 changelog entry (only join), got %d", len(r.changelog))
+		t.Fatalf("expected only the join entry, got %d", len(r.changelog))
+	}
+	if _, ok := c.last("player_updated"); ok {
+		t.Error("no-op update should not be broadcast")
+	}
+}
+
+func TestUpdateStats_RejectsInvalid(t *testing.T) {
+	r := NewRoom("TEST")
+	c := &mockClient{id: "p1"}
+	mustJoin(t, r, c, "Alice", "")
+
+	bad := []models.Stats{
+		stats(0, 0, "human"),
+		stats(11, 0, "human"),
+		stats(1, -1, "human"),
+		stats(1, 1000, "human"),
+		stats(1, 0, "dragon"),
+	}
+	for _, s := range bad {
+		if err := r.UpdateStats(c, s); err == nil {
+			t.Errorf("expected error for %+v", s)
+		}
+	}
+	if len(r.changelog) != 1 {
+		t.Errorf("invalid updates must not be logged")
+	}
+}
+
+func TestUpdateStats_NotInRoom(t *testing.T) {
+	r := NewRoom("TEST")
+	if err := r.UpdateStats(&mockClient{id: "x"}, models.DefaultStats()); err != ErrNotInRoom {
+		t.Errorf("expected ErrNotInRoom, got %v", err)
 	}
 }
 
 func TestChangeLog_CappedAt100(t *testing.T) {
 	r := NewRoom("TEST")
-
-	// Add 110 entries directly
 	r.mu.Lock()
 	for i := 0; i < 110; i++ {
-		r.addChangeLogEntry(&models.ChangeLogEntry{
-			Timestamp:  int64(i),
-			PlayerName: "Test",
-			EventType:  "join",
-		})
+		r.addChangeLogEntry(&models.ChangeLogEntry{Timestamp: int64(i), PlayerName: "Test", EventType: "join"})
 	}
 	r.mu.Unlock()
 
 	if len(r.changelog) != maxChangeLogEntries {
 		t.Fatalf("expected %d entries, got %d", maxChangeLogEntries, len(r.changelog))
 	}
-
-	// Oldest entry should be the one with timestamp 10 (0-9 trimmed)
 	if r.changelog[0].Timestamp != 10 {
 		t.Errorf("expected oldest entry timestamp 10, got %d", r.changelog[0].Timestamp)
 	}
 }
 
-func TestSendRoomState_IncludesChangeLog(t *testing.T) {
+func TestRoomState_IncludesChangeLog(t *testing.T) {
 	r := NewRoom("TEST")
 	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
+	mustJoin(t, r, c, "Alice", "")
 
-	r.AddClient(c, player)
-
-	// Find the room_state message sent to the client
-	var roomState models.OutgoingMessage
-	for _, msg := range c.messages {
-		var out models.OutgoingMessage
-		if err := json.Unmarshal(msg, &out); err != nil {
-			continue
-		}
-		if out.Type == "room_state" {
-			roomState = out
-			break
-		}
+	state, ok := c.last("room_state")
+	if !ok {
+		t.Fatal("no room_state")
 	}
-
-	if roomState.Type != "room_state" {
-		t.Fatal("room_state message not found in client messages")
-	}
-
-	if len(roomState.ChangeLog) != 1 {
-		t.Fatalf("expected 1 changelog entry in room_state, got %d", len(roomState.ChangeLog))
-	}
-
-	if roomState.ChangeLog[0].EventType != "join" {
-		t.Errorf("expected join entry, got '%s'", roomState.ChangeLog[0].EventType)
+	if len(state.ChangeLog) != 1 || state.ChangeLog[0].EventType != "join" {
+		t.Errorf("unexpected changelog: %+v", state.ChangeLog)
 	}
 }
 
-func TestRejoinClient_GeneratesJoinEntry(t *testing.T) {
+func TestCloseIfIdle(t *testing.T) {
 	r := NewRoom("TEST")
-	c1 := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
+	now := time.Now()
+	ttl := 10 * time.Minute
 
-	r.AddClient(c1, player)
-	r.DisconnectClient(c1, "sess-p1")
-
-	c2 := &mockClient{id: "p2"}
-	restored, ok := r.RejoinClient(c2, "sess-p1")
-
-	if !ok || restored == nil {
-		t.Fatal("expected successful rejoin")
+	// Freshly created room with nobody in it.
+	if r.CloseIfIdle(now, ttl) {
+		t.Fatal("room closed before ttl")
 	}
-
-	// 1 join (initial) + 1 join (rejoin) = 2
-	if len(r.changelog) != 2 {
-		t.Fatalf("expected 2 changelog entries, got %d", len(r.changelog))
-	}
-
-	if r.changelog[1].EventType != "join" {
-		t.Errorf("expected rejoin entry with type 'join', got '%s'", r.changelog[1].EventType)
-	}
-}
-
-func TestDisconnectClient_NoLeaveEntry(t *testing.T) {
-	r := NewRoom("TEST")
 	c := &mockClient{id: "p1"}
-	player := newTestPlayer("p1", "Alice")
+	mustJoin(t, r, c, "Alice", "")
+	if r.CloseIfIdle(now.Add(time.Hour), ttl) {
+		t.Fatal("room with an active player must not close")
+	}
 
-	r.AddClient(c, player)
-	r.DisconnectClient(c, "sess-p1")
+	r.Disconnect(c)
+	if r.CloseIfIdle(now.Add(time.Hour), ttl) {
+		t.Fatal("room with a ghost must not close")
+	}
 
-	// Only the initial join, no leave
-	if len(r.changelog) != 1 {
-		t.Fatalf("expected 1 changelog entry (only join), got %d", len(r.changelog))
+	r.mu.Lock()
+	for sid, g := range r.ghosts {
+		g.timer.Stop()
+		delete(r.ghosts, sid)
+	}
+	r.updateEmptyLocked()
+	r.mu.Unlock()
+
+	if !r.CloseIfIdle(time.Now().Add(ttl), ttl) {
+		t.Fatal("empty room should close after ttl")
+	}
+	if _, err := r.Join(&mockClient{id: "p2"}, "Bob", ""); err != ErrRoomClosed {
+		t.Errorf("closed room must reject joins, got %v", err)
 	}
 }
