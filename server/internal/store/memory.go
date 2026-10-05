@@ -79,6 +79,10 @@ func (m *Memory) applyLocked(op Op) error {
 		}
 		m.events[e.GameID] = append(events, e)
 		touch(g, e.CreatedAt)
+	case SetHost:
+		if g := m.games[op.GameID]; g != nil {
+			g.HostSeatID = op.SeatID
+		}
 	case FinishGame:
 		if g := m.games[op.GameID]; g != nil && g.Status == StatusActive {
 			g.Status = StatusFinished

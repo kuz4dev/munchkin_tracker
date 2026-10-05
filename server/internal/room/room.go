@@ -41,6 +41,7 @@ var (
 	ErrGameFinished  = errors.New("game finished")
 	ErrRoomFull      = errors.New("room is full")
 	ErrUnknownWinner = errors.New("unknown winner")
+	ErrNotHost       = errors.New("only the host can finish the game")
 )
 
 type Client interface {
@@ -64,6 +65,7 @@ type seat struct {
 	player      *models.Player
 	sessionHash string
 	client      Client // nil while offline
+	joinedAt    time.Time
 }
 
 // Room holds the state of one game. All mutations and the broadcasts they
@@ -78,14 +80,17 @@ type Room struct {
 	status     string
 	winnerID   string
 	finishedAt time.Time
-	seats      map[string]*seat // player ID -> seat
-	bySession  map[string]*seat // session hash -> seat
-	byClient   map[string]*seat // client ID -> seat
-	changelog  []*models.ChangeLogEntry
-	nextSeq    int64
-	idleSince  time.Time // zero while anyone is online
-	closed     bool
-	mu         sync.Mutex
+	// hostID is the player who may finish the game: whoever joined first.
+	// It passes on only when the host leaves, not when they are offline.
+	hostID    string
+	seats     map[string]*seat // player ID -> seat
+	bySession map[string]*seat // session hash -> seat
+	byClient  map[string]*seat // client ID -> seat
+	changelog []*models.ChangeLogEntry
+	nextSeq   int64
+	idleSince time.Time // zero while anyone is online
+	closed    bool
+	mu        sync.Mutex
 }
 
 // NewRoom creates an empty room. persist may be nil.
@@ -119,9 +124,15 @@ func RestoreRoom(g *store.LoadedGame, persist Persister) *Room {
 		st := &seat{
 			player:      &models.Player{ID: s.ID, Name: s.Name, Stats: s.Stats},
 			sessionHash: s.SessionHash,
+			joinedAt:    s.JoinedAt,
 		}
 		r.seats[st.player.ID] = st
 		r.bySession[st.sessionHash] = st
+	}
+	r.hostID = g.Game.HostSeatID
+	if r.seats[r.hostID] == nil {
+		// Games from before hosts existed: the longest-seated player hosts.
+		r.setHostLocked(r.longestSeatedLocked())
 	}
 	for _, e := range g.RecentEvents {
 		r.addChangeLogEntry(e.Entry())
@@ -138,6 +149,31 @@ func (r *Room) gameRecord() store.Game {
 		CreatedAt:      r.CreatedAt,
 		LastActivityAt: r.CreatedAt,
 	}
+}
+
+// setHostLocked makes playerID the host (empty for none) and tells everyone.
+func (r *Room) setHostLocked(playerID string) {
+	if r.hostID == playerID {
+		return
+	}
+	r.hostID = playerID
+	r.persist.Enqueue(store.SetHost{GameID: r.ID, SeatID: playerID})
+	r.broadcastLocked(models.OutgoingMessage{Type: "host_changed", HostID: playerID})
+}
+
+// longestSeatedLocked returns the player who joined first, or "" if none.
+func (r *Room) longestSeatedLocked() string {
+	var first *seat
+	for _, s := range r.seats {
+		if first == nil || s.joinedAt.Before(first.joinedAt) ||
+			(s.joinedAt.Equal(first.joinedAt) && s.player.ID < first.player.ID) {
+			first = s
+		}
+	}
+	if first == nil {
+		return ""
+	}
+	return first.player.ID
 }
 
 // HashSession returns the form in which session IDs are kept on the server.
@@ -194,6 +230,7 @@ func (r *Room) Join(c Client, name, sessionID string) (*models.Player, error) {
 			Stats: models.DefaultStats(),
 		},
 		sessionHash: HashSession(sessionID),
+		joinedAt:    time.Now(),
 	}
 	r.seats[s.player.ID] = s
 	r.bySession[s.sessionHash] = s
@@ -204,8 +241,11 @@ func (r *Room) Join(c Client, name, sessionID string) (*models.Player, error) {
 		SessionHash: s.sessionHash,
 		Name:        s.player.Name,
 		Stats:       s.player.Stats,
-		JoinedAt:    time.Now(),
+		JoinedAt:    s.joinedAt,
 	}})
+	if r.hostID == "" {
+		r.setHostLocked(s.player.ID)
+	}
 
 	entry := r.appendEventLocked(s.player, "join", "", "", "")
 	r.broadcastExceptLocked(c, models.OutgoingMessage{Type: "player_joined", Player: s.player})
@@ -246,6 +286,9 @@ func (r *Room) Leave(c Client) {
 	entry := r.appendEventLocked(s.player, "leave", "", "", "")
 	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
 	r.broadcastLocked(models.OutgoingMessage{Type: "player_left", PlayerID: s.player.ID})
+	if r.hostID == s.player.ID {
+		r.setHostLocked(r.longestSeatedLocked())
+	}
 }
 
 // Disconnect marks the client's player offline. The player stays in the game
@@ -282,6 +325,9 @@ func (r *Room) Finish(c Client, winnerID string) error {
 	}
 	if r.status != store.StatusActive {
 		return ErrGameFinished
+	}
+	if s.player.ID != r.hostID {
+		return ErrNotHost
 	}
 	winnerName := ""
 	if winnerID != "" {
@@ -444,6 +490,7 @@ func (r *Room) sendRoomStateLocked(c Client, self *seat, sessionID string) {
 		ChangeLog: r.changelog,
 		Status:    r.status,
 		WinnerID:  r.winnerID,
+		HostID:    r.hostID,
 		CreatedAt: r.CreatedAt.UnixMilli(),
 	}
 	if !r.finishedAt.IsZero() {

@@ -13,20 +13,20 @@ func TestFinish_WithWinner(t *testing.T) {
 	m := NewManager(nil, rec)
 	r, _ := m.CreateRoom()
 	alice := &mockClient{id: "a"}
-	alicePlayer := mustJoin(t, r, alice, "Alice", "")
+	mustJoin(t, r, alice, "Alice", "") // host
 	bob := &mockClient{id: "b"}
-	mustJoin(t, r, bob, "Bob", "")
+	bobPlayer := mustJoin(t, r, bob, "Bob", "")
 
-	if err := r.Finish(bob, alicePlayer.ID); err != nil {
+	if err := r.Finish(alice, bobPlayer.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	msg, ok := alice.last("game_finished")
-	if !ok || msg.Status != store.StatusFinished || msg.WinnerID != alicePlayer.ID || msg.FinishedAt == 0 {
+	msg, ok := bob.last("game_finished")
+	if !ok || msg.Status != store.StatusFinished || msg.WinnerID != bobPlayer.ID || msg.FinishedAt == 0 {
 		t.Fatalf("unexpected game_finished: %+v", msg)
 	}
-	entry, _ := alice.last("changelog_entry")
-	if e := entry.ChangeLogEntry; e.EventType != "finish" || e.PlayerName != "Bob" || e.NewValue != "Alice" {
+	entry, _ := bob.last("changelog_entry")
+	if e := entry.ChangeLogEntry; e.EventType != "finish" || e.PlayerName != "Alice" || e.NewValue != "Bob" {
 		t.Errorf("unexpected finish entry: %+v", e)
 	}
 
@@ -36,7 +36,7 @@ func TestFinish_WithWinner(t *testing.T) {
 			finish = &f
 		}
 	}
-	if finish == nil || finish.GameID != r.ID || finish.WinnerSeatID != alicePlayer.ID {
+	if finish == nil || finish.GameID != r.ID || finish.WinnerSeatID != bobPlayer.ID {
 		t.Errorf("finish not persisted: %+v", finish)
 	}
 }

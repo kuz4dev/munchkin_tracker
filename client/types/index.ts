@@ -32,6 +32,7 @@ export type GameStatus = 'active' | 'finished'
 
 export type IncomingMessageType =
   | 'game_finished'
+  | 'host_changed'
   | 'room_state'
   | 'player_joined'
   | 'player_left'
@@ -50,10 +51,18 @@ export interface RoomStateMessage {
   changeLog?: ChangeLogEntry[]
   status: GameStatus
   winnerId?: string
+  /** The player who may finish the game */
+  hostId?: string
   /** Unix ms */
   createdAt: number
   /** Unix ms, only for finished games */
   finishedAt?: number
+}
+
+export interface HostChangedMessage {
+  type: 'host_changed'
+  /** Absent when nobody is left to host */
+  hostId?: string
 }
 
 export interface GameFinishedMessage {
@@ -95,6 +104,7 @@ export type ServerMessage =
   | PlayerUpdatedMessage
   | ChangeLogEntryMessage
   | GameFinishedMessage
+  | HostChangedMessage
   | ErrorMessage
 
 export interface OutgoingJoinMessage {

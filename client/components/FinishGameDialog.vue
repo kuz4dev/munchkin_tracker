@@ -33,11 +33,12 @@ const players = computed(() =>
   [...roomStore.allPlayers].sort((a, b) => b.level - a.level || a.name.localeCompare(b.name)),
 )
 
-const title = computed(() =>
-  props.suggestedWinnerId && props.suggestedWinnerId === roomStore.playerId
-    ? 'Победа? 🏆'
-    : 'Завершить игру',
-)
+const title = computed(() => {
+  if (!props.suggestedWinnerId) return 'Завершить игру'
+  if (props.suggestedWinnerId === roomStore.playerId) return 'Победа? 🏆'
+  const name = roomStore.players.get(props.suggestedWinnerId)?.name
+  return name ? `Победа: ${name}? 🏆` : 'Завершить игру'
+})
 
 watch(open, (isOpen) => {
   if (isOpen) {

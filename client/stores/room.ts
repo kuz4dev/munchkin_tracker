@@ -29,6 +29,7 @@ export const useRoomStore = defineStore('room', () => {
   const notice = ref('')
   const status = ref<GameStatus>('active')
   const winnerId = ref('')
+  const hostId = ref('')
   const createdAt = ref(0)
   const finishedAt = ref(0)
   const loadingOlder = ref(false)
@@ -51,6 +52,9 @@ export const useRoomStore = defineStore('room', () => {
   /** Whether events older than the loaded ones exist (seq starts at 1) */
   const hasOlder = computed(() => (changelog.value[0]?.seq ?? 1) > 1)
   const winner = computed(() => (winnerId.value ? players.get(winnerId.value) : undefined))
+  const host = computed(() => (hostId.value ? players.get(hostId.value) : undefined))
+  /** Only the host can finish the game */
+  const isHost = computed(() => !!playerId.value && hostId.value === playerId.value)
 
   connection.onMessage(handleMessage)
 
@@ -80,6 +84,7 @@ export const useRoomStore = defineStore('room', () => {
         roomCode.value = msg.roomCode
         status.value = msg.status
         winnerId.value = msg.winnerId ?? ''
+        hostId.value = msg.hostId ?? ''
         createdAt.value = msg.createdAt
         finishedAt.value = msg.finishedAt ?? 0
         if (roomCode.value && playerName.value && sessionId.value) {
@@ -111,6 +116,10 @@ export const useRoomStore = defineStore('room', () => {
         if (changelog.value.length > MAX_CHANGELOG) {
           changelog.value = changelog.value.slice(-MAX_CHANGELOG)
         }
+        break
+
+      case 'host_changed':
+        hostId.value = msg.hostId ?? ''
         break
 
       case 'game_finished':
@@ -176,6 +185,7 @@ export const useRoomStore = defineStore('room', () => {
     sessionId.value = ''
     status.value = 'active'
     winnerId.value = ''
+    hostId.value = ''
     createdAt.value = 0
     finishedAt.value = 0
     joinedOnce = false
@@ -274,6 +284,9 @@ export const useRoomStore = defineStore('room', () => {
     notice,
     status,
     winnerId,
+    hostId,
+    host,
+    isHost,
     createdAt,
     finishedAt,
     isFinished,

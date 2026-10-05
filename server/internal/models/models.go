@@ -157,6 +157,7 @@ type OutgoingMessage struct {
 	// Game lifecycle, in room_state and game_finished.
 	Status         string            `json:"status,omitempty"`
 	WinnerID       string            `json:"winnerId,omitempty"`
+	HostID         string            `json:"hostId,omitempty"`
 	CreatedAt      int64             `json:"createdAt,omitempty"`
 	FinishedAt     int64             `json:"finishedAt,omitempty"`
 	Message        string            `json:"message,omitempty"`

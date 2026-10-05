@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 
 defineProps<{
   player: Player
+  isHost?: boolean
 }>()
 </script>
 
@@ -20,6 +21,7 @@ defineProps<{
       <div class="min-w-0 mr-2">
         <h3 class="font-bold text-base truncate text-foreground">
           {{ player.name }}
+          <span v-if="isHost" class="text-xs font-normal text-muted-foreground">· хост</span>
         </h3>
         <p v-if="!player.connected" class="text-xs text-muted-foreground">
           не в сети

@@ -25,6 +25,14 @@ describe('PlayerCard', () => {
     expect(wrapper.text()).toContain('Bob')
   })
 
+  it('marks the host', () => {
+    const host = mount(PlayerCard, { props: { player: makePlayer(), isHost: true } })
+    expect(host.text()).toContain('хост')
+
+    const guest = mount(PlayerCard, { props: { player: makePlayer() } })
+    expect(guest.text()).not.toContain('хост')
+  })
+
   it('marks offline players', () => {
     const offline = mount(PlayerCard, { props: { player: makePlayer({ connected: false }) } })
     expect(offline.text()).toContain('не в сети')

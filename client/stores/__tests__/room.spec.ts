@@ -563,6 +563,24 @@ describe('useRoomStore', () => {
       expect(store.finishedAt).toBe(9000)
     })
 
+    it('knows who the host is', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+      const bob = { ...alice, id: 'p2', name: 'Bob' }
+      handler({ type: 'room_state', roomCode: 'ABC123', playerId: 'p1', sessionId: 's', status: 'active', hostId: 'p2', createdAt: 0, players: [alice, bob] })
+
+      expect(store.isHost).toBe(false)
+      expect(store.host?.name).toBe('Bob')
+
+      // The host left: the role passes to us
+      handler({ type: 'host_changed', hostId: 'p1' })
+      expect(store.isHost).toBe(true)
+
+      handler({ type: 'host_changed' })
+      expect(store.hostId).toBe('')
+      expect(store.isHost).toBe(false)
+    })
+
     it('finishGame sends the winner, or none', () => {
       const store = useRoomStore()
       store.finishGame('p1')

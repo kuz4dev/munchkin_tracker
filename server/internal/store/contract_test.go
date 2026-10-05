@@ -44,6 +44,7 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 			CreateGame{g},
 			AddSeat{alice}, AppendEvent{event(g, alice, 1, "join", base.Add(time.Second))},
 			AddSeat{bob}, AppendEvent{event(g, bob, 2, "join", base.Add(2*time.Second))},
+			SetHost{GameID: g.ID, SeatID: alice.ID},
 			UpdateSeatStats{SeatID: alice.ID, Stats: level5},
 			AppendEvent{Event{GameID: g.ID, Seq: 3, SeatID: alice.ID, PlayerName: "Alice", Type: "stat_change",
 				Field: "level", OldValue: "1", NewValue: "5", CreatedAt: base.Add(3 * time.Second)}},
@@ -57,6 +58,9 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 		}
 		if loaded.Game.ID != g.ID || loaded.Game.Status != StatusActive || !loaded.Game.CreatedAt.Equal(base) {
 			t.Errorf("unexpected game %+v", loaded.Game)
+		}
+		if loaded.Game.HostSeatID != alice.ID {
+			t.Errorf("expected Alice as host, got %q", loaded.Game.HostSeatID)
 		}
 		if !loaded.Game.LastActivityAt.Equal(base.Add(4 * time.Second)) {
 			t.Errorf("last activity should follow the latest event, got %v", loaded.Game.LastActivityAt)
@@ -168,6 +172,16 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 		}
 		if loaded, _ := st.LoadActiveGame(ctx, "CLS001", time.Time{}); loaded != nil {
 			t.Error("closed game must not load")
+		}
+	})
+
+	t.Run("host can be cleared", func(t *testing.T) {
+		st := newStore(t)
+		g := newGame("HOST01", base)
+		s := newSeat(g, "Alice", base)
+		mustApply(t, st, CreateGame{g}, AddSeat{s}, SetHost{GameID: g.ID, SeatID: s.ID}, SetHost{GameID: g.ID})
+		if loaded, _ := st.LoadActiveGame(ctx, "HOST01", time.Time{}); loaded == nil || loaded.Game.HostSeatID != "" {
+			t.Errorf("expected no host, got %+v", loaded)
 		}
 	})
 

@@ -55,12 +55,19 @@ watch(() => roomStore.roomCode, (code) => {
   }
 })
 
-// Reaching the last level: offer to finish the game with yourself as winner
-watch(() => roomStore.currentPlayer?.level, (level, previous) => {
-  if (previous !== undefined && level === MAX_LEVEL && previous < MAX_LEVEL && !roomStore.isFinished) {
-    openFinishDialog(roomStore.playerId)
-  }
-})
+// Someone reached the last level: offer the host to finish with them as winner
+watch(
+  () => roomStore.allPlayers.map((p) => [p.id, p.level] as const),
+  (levels, previous) => {
+    if (!roomStore.isHost || roomStore.isFinished) return
+    const before = new Map(previous)
+    const champion = levels.find(([id, level]) => {
+      const was = before.get(id)
+      return was !== undefined && was < MAX_LEVEL && level === MAX_LEVEL
+    })
+    if (champion) openFinishDialog(champion[0])
+  },
+)
 
 function openFinishDialog(winnerId = '') {
   suggestedWinnerId.value = winnerId
@@ -135,16 +142,21 @@ function copyRoomCode() {
           </DialogContent>
         </Dialog>
 
-        <Button
-          variant="ghost"
-          class="w-full text-muted-foreground"
-          :disabled="!roomStore.connected"
-          @click="openFinishDialog()"
-        >
-          <Flag class="size-4" />
-          Завершить игру
-        </Button>
-        <FinishGameDialog v-model:open="finishOpen" :suggested-winner-id="suggestedWinnerId" />
+        <template v-if="roomStore.isHost">
+          <Button
+            variant="ghost"
+            class="w-full text-muted-foreground"
+            :disabled="!roomStore.connected"
+            @click="openFinishDialog()"
+          >
+            <Flag class="size-4" />
+            Завершить игру
+          </Button>
+          <FinishGameDialog v-model:open="finishOpen" :suggested-winner-id="suggestedWinnerId" />
+        </template>
+        <p v-else-if="roomStore.host" class="text-center text-xs text-muted-foreground">
+          Завершить игру может хост — {{ roomStore.host.name }}
+        </p>
 
         <!-- Other players -->
         <section v-if="roomStore.otherPlayers.length > 0">
@@ -159,6 +171,7 @@ function copyRoomCode() {
               v-for="player in roomStore.otherPlayers"
               :key="player.id"
               :player="player"
+              :is-host="player.id === roomStore.hostId"
             />
           </div>
         </section>

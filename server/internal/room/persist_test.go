@@ -43,9 +43,9 @@ func TestRoom_PersistsEveryChangeInOrder(t *testing.T) {
 	ops := rec.all()
 	want := []string{
 		"store.CreateGame",
-		"store.AddSeat", "store.AppendEvent", // join
+		"store.AddSeat", "store.SetHost", "store.AppendEvent", // join (first player hosts)
 		"store.UpdateSeatStats", "store.AppendEvent", "store.AppendEvent", // level + gear
-		"store.RemoveSeat", "store.AppendEvent", // leave
+		"store.RemoveSeat", "store.AppendEvent", "store.SetHost", // leave, nobody left to host
 	}
 	if len(ops) != len(want) {
 		t.Fatalf("expected %d ops, got %d: %#v", len(want), len(ops), ops)
@@ -67,7 +67,7 @@ func TestRoom_PersistsEveryChangeInOrder(t *testing.T) {
 	if seat.SessionHash == "" || seat.SessionHash == sessionOf(t, alice) {
 		t.Error("the store must get the session hash, never the raw session ID")
 	}
-	if upd := ops[3].(store.UpdateSeatStats); upd.Stats.Level != 3 || upd.Stats.GearBonus != 1 {
+	if upd := ops[4].(store.UpdateSeatStats); upd.Stats.Level != 3 || upd.Stats.GearBonus != 1 {
 		t.Errorf("unexpected stats update %+v", upd)
 	}
 }
@@ -99,6 +99,8 @@ func typeName(op store.Op) string {
 		return "store.AppendEvent"
 	case store.FinishGame:
 		return "store.FinishGame"
+	case store.SetHost:
+		return "store.SetHost"
 	case store.TouchGame:
 		return "store.TouchGame"
 	case store.CloseGame:

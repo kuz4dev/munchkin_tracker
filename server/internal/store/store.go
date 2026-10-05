@@ -30,6 +30,7 @@ type Game struct {
 	LastActivityAt time.Time
 	FinishedAt     time.Time // zero unless finished
 	WinnerSeatID   string    // empty if finished without a winner
+	HostSeatID     string    // the player who may finish the game; empty if none
 }
 
 // Seat is a player's place in a game with their current stats.
@@ -97,6 +98,12 @@ type RemoveSeat struct {
 // AppendEvent records an event and bumps the game's last activity.
 type AppendEvent struct{ Event Event }
 
+// SetHost changes who may finish the game. SeatID may be empty.
+type SetHost struct {
+	GameID string
+	SeatID string
+}
+
 type FinishGame struct {
 	GameID       string
 	WinnerSeatID string
@@ -122,6 +129,7 @@ func (AddSeat) isOp()         {}
 func (UpdateSeatStats) isOp() {}
 func (RemoveSeat) isOp()      {}
 func (AppendEvent) isOp()     {}
+func (SetHost) isOp()         {}
 func (FinishGame) isOp()      {}
 func (TouchGame) isOp()       {}
 func (CloseGame) isOp()       {}

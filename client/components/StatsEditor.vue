@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { usePlayerStats } from '@/composables/usePlayerStats'
+import { useRoomStore } from '@/stores/room'
 import { CLASSES, GENDERS, MAX_GEAR_BONUS, MAX_LEVEL, MIN_GEAR_BONUS, MIN_LEVEL, RACES } from '@/constants'
 import type { PlayerStats } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/select'
 
 const { player, power, changeLevel, changeGear, updateAttribute } = usePlayerStats()
+const roomStore = useRoomStore()
 
 function onSelectUpdate<K extends keyof PlayerStats>(key: K, value: unknown) {
   if (typeof value === 'string') updateAttribute(key, value as PlayerStats[K])
@@ -27,7 +29,9 @@ function onSelectUpdate<K extends keyof PlayerStats>(key: K, value: unknown) {
     <div class="bg-primary/5 px-4 sm:px-6 py-4 sm:py-5">
       <div class="flex items-center justify-between">
         <div class="min-w-0">
-          <p class="text-sm text-muted-foreground font-medium">Ваш персонаж</p>
+          <p class="text-sm text-muted-foreground font-medium">
+            Ваш персонаж<span v-if="roomStore.isHost"> · хост</span>
+          </p>
           <h2 class="text-lg sm:text-xl font-bold text-foreground truncate">{{ player.name }}</h2>
         </div>
         <div class="flex flex-col items-center bg-primary text-primary-foreground rounded-2xl px-4 sm:px-5 py-2 sm:py-3 shadow-sm shrink-0 ml-3">
