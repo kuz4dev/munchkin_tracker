@@ -95,7 +95,8 @@ func TestListEvents_Errors(t *testing.T) {
 		"/api/rooms/" + code + "/events?before=x":           http.StatusBadRequest,
 		"/api/rooms/" + code + "/events?before=5&limit=0":   http.StatusBadRequest,
 		"/api/rooms/" + code + "/events?before=5&limit=201": http.StatusBadRequest,
-		"/api/rooms/NOPE00/events?before=5":                 http.StatusNotFound,
+		"/api/rooms/NOPE00/events?before=5":                 http.StatusNotFound, // malformed code
+		"/api/rooms/ZZZ999/events?before=5":                 http.StatusNotFound, // valid but unknown
 	}
 	for url, want := range cases {
 		if rec, _ := get(t, h, url); rec.Code != want {

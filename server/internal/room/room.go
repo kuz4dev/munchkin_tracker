@@ -18,6 +18,10 @@ import (
 
 const maxChangeLogEntries = 100
 
+// MaxPlayers caps players per game: Munchkin is played by 3–6, expansions
+// allow a few more. It keeps a single client from flooding a room with seats.
+const MaxPlayers = 12
+
 const (
 	// EmptyRoomTTL is how long a room with no players is kept.
 	EmptyRoomTTL = 10 * time.Minute
@@ -35,6 +39,7 @@ var (
 	ErrNotInRoom     = errors.New("not in a room")
 	ErrAlreadyInRoom = errors.New("already in a room")
 	ErrGameFinished  = errors.New("game finished")
+	ErrRoomFull      = errors.New("room is full")
 	ErrUnknownWinner = errors.New("unknown winner")
 )
 
@@ -176,6 +181,9 @@ func (r *Room) Join(c Client, name, sessionID string) (*models.Player, error) {
 
 	if r.status != store.StatusActive {
 		return nil, ErrGameFinished
+	}
+	if len(r.seats) >= MaxPlayers {
+		return nil, ErrRoomFull
 	}
 
 	sessionID = uuid.NewString()

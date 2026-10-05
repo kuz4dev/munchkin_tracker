@@ -65,6 +65,9 @@ func (m *Manager) CreateRoom() (*Room, error) {
 // once a player actually reconnects here.
 func (m *Manager) GetRoom(ctx context.Context, code string) (*Room, error) {
 	code = models.NormalizeRoomCode(code)
+	if !models.ValidRoomCode(code) {
+		return nil, nil
+	}
 	m.mu.RLock()
 	r := m.rooms[code]
 	m.mu.RUnlock()
@@ -136,9 +139,9 @@ func (m *Manager) RunJanitor(interval time.Duration, stop <-chan struct{}) {
 }
 
 func (m *Manager) generateCode() string {
-	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	const chars = models.RoomCodeAlphabet
 	for {
-		code := make([]byte, 6)
+		code := make([]byte, models.RoomCodeLength)
 		for i := range code {
 			n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
 			code[i] = chars[n.Int64()]

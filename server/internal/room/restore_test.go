@@ -88,12 +88,12 @@ func TestRestore_StaleGameIsNotRestored(t *testing.T) {
 	st := store.NewMemory()
 	old := time.Now().Add(-OfflineRoomTTL - time.Minute)
 	if err := st.Apply(context.Background(), []store.Op{store.CreateGame{Game: store.Game{
-		ID: "g1", Code: "OLD123", Status: store.StatusActive, CreatedAt: old, LastActivityAt: old,
+		ID: "g1", Code: "STA234", Status: store.StatusActive, CreatedAt: old, LastActivityAt: old,
 	}}}); err != nil {
 		t.Fatal(err)
 	}
 	m := NewManager(st, nil)
-	if getRoom(t, m, "OLD123") != nil {
+	if getRoom(t, m, "STA234") != nil {
 		t.Error("a game idle for longer than OfflineRoomTTL must not come back")
 	}
 }

@@ -1,10 +1,11 @@
 package api
 
 import (
-	"net"
 	"net/http"
 	"sync"
 	"time"
+
+	"munchkin-tracker-server/internal/clientip"
 )
 
 // rateLimiter is a fixed-window per-key counter. The whole map is reset each
@@ -45,19 +46,10 @@ func (l *rateLimiter) Allow(key string) bool {
 
 func (l *rateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !l.Allow(clientIP(r)) {
+		if !l.Allow(clientip.FromRequest(r)) {
 			writeError(w, http.StatusTooManyRequests, "too many requests")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// clientIP expects chi's RealIP middleware to have set RemoteAddr.
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

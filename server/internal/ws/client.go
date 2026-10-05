@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -18,10 +20,19 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 4096
+
+	// A player taps "+" a few times a second at most; anything faster is a
+	// script flooding the room (every change is broadcast and persisted).
+	messagesPerSecond = 10
+	messageBurst      = 30
 )
+
+// joinTimeout closes connections that never join a room (a var for tests).
+var joinTimeout = 30 * time.Second
 
 type Client struct {
 	id        string
+	ip        string
 	hub       *Hub
 	conn      *websocket.Conn
 	send      chan []byte
@@ -29,12 +40,16 @@ type Client struct {
 	closeOnce sync.Once
 	room      *room.Room // only accessed from ReadPump goroutine
 	manager   *room.Manager
+	joined    atomic.Bool
+	limiter   tokenBucket // only accessed from ReadPump goroutine
 }
 
-func NewClient(id string, conn *websocket.Conn, manager *room.Manager, hub *Hub) *Client {
+func NewClient(id, ip string, conn *websocket.Conn, manager *room.Manager, hub *Hub) *Client {
 	return &Client{
 		id:      id,
+		ip:      ip,
 		hub:     hub,
+		limiter: tokenBucket{rate: messagesPerSecond, burst: messageBurst},
 		conn:    conn,
 		send:    make(chan []byte, 256),
 		done:    make(chan struct{}),
@@ -66,8 +81,21 @@ func (c *Client) close() {
 	})
 }
 
+// closeWith tells the client why it is being disconnected, then closes.
+func (c *Client) closeWith(code int, reason string) {
+	c.conn.WriteControl(websocket.CloseMessage,
+		websocket.FormatCloseMessage(code, reason), time.Now().Add(time.Second))
+	c.close()
+}
+
 func (c *Client) ReadPump() {
+	joinTimer := time.AfterFunc(joinTimeout, func() {
+		if !c.joined.Load() {
+			c.closeWith(websocket.ClosePolicyViolation, "join timeout")
+		}
+	})
 	defer func() {
+		joinTimer.Stop()
 		if c.room != nil {
 			c.room.Disconnect(c)
 		}
@@ -90,8 +118,30 @@ func (c *Client) ReadPump() {
 			}
 			return
 		}
-		c.handleMessage(message)
+		if !c.limiter.allow(time.Now()) {
+			log.Printf("client %s exceeded the message rate, closing", c.id)
+			c.closeWith(websocket.ClosePolicyViolation, "too many messages")
+			return
+		}
+		if !c.safeHandleMessage(message) {
+			return
+		}
 	}
+}
+
+// safeHandleMessage keeps a bug in one handler from crashing the whole
+// server: HTTP's Recoverer middleware doesn't cover WebSocket goroutines.
+// It returns false if the connection should be dropped.
+func (c *Client) safeHandleMessage(message []byte) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic handling message from %s: %v\n%s", c.id, r, debug.Stack())
+			c.closeWith(websocket.CloseInternalServerErr, "internal error")
+			ok = false
+		}
+	}()
+	c.handleMessage(message)
+	return true
 }
 
 func (c *Client) WritePump() {
@@ -156,7 +206,7 @@ func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
 	defer cancel()
 	r, err := c.manager.GetRoom(ctx, msg.RoomCode)
 	if err != nil {
-		log.Printf("load room %s: %v", msg.RoomCode, err)
+		log.Printf("load room %q: %v", msg.RoomCode, err)
 		c.sendError("temporarily unavailable")
 		return
 	}
@@ -171,6 +221,7 @@ func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
 		return
 	}
 	c.room = r
+	c.joined.Store(true)
 	log.Printf("player %s (%s) joined room %s", player.Name, c.id, r.Code)
 }
 
@@ -215,4 +266,26 @@ func (c *Client) sendError(message string) {
 		return
 	}
 	c.Send(data)
+}
+
+// tokenBucket is a per-connection rate limiter: rate tokens per second,
+// up to burst. Not safe for concurrent use.
+type tokenBucket struct {
+	rate, burst float64
+	tokens      float64
+	last        time.Time
+}
+
+func (b *tokenBucket) allow(now time.Time) bool {
+	if b.last.IsZero() {
+		b.tokens = b.burst
+	} else {
+		b.tokens = min(b.burst, b.tokens+now.Sub(b.last).Seconds()*b.rate)
+	}
+	b.last = now
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
 }

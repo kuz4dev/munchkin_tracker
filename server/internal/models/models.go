@@ -66,10 +66,17 @@ func (p *Player) Power() int {
 	return p.Level + p.GearBonus
 }
 
-// NormalizeName trims whitespace, strips control characters and validates length.
+// zeroWidthJoiner is a format character kept in names because emoji
+// sequences (e.g. 👨‍👩‍👧) are built with it.
+const zeroWidthJoiner = '\u200D'
+
+// NormalizeName trims whitespace, strips control and invisible formatting
+// characters and validates length. Formatting characters (bidi overrides,
+// zero-width spaces) would let a player reverse text in the journal or pass
+// for someone else with a visually identical name.
 func NormalizeName(name string) (string, error) {
 	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || (unicode.Is(unicode.Cf, r) && r != zeroWidthJoiner) {
 			return -1
 		}
 		return r
@@ -84,9 +91,28 @@ func NormalizeName(name string) (string, error) {
 	return name, nil
 }
 
+// RoomCodeAlphabet has no look-alike characters (0/O, 1/I/L).
+const RoomCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+const RoomCodeLength = 6
+
 // NormalizeRoomCode makes room codes case-insensitive.
 func NormalizeRoomCode(code string) string {
 	return strings.ToUpper(strings.TrimSpace(code))
+}
+
+// ValidRoomCode reports whether a normalized code could have been issued.
+// Anything else is rejected before touching the database or the logs.
+func ValidRoomCode(code string) bool {
+	if len(code) != RoomCodeLength {
+		return false
+	}
+	for _, r := range code {
+		if !strings.ContainsRune(RoomCodeAlphabet, r) {
+			return false
+		}
+	}
+	return true
 }
 
 type RoomInfo struct {

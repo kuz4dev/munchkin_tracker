@@ -397,3 +397,13 @@ func TestCloseIfIdle(t *testing.T) {
 		t.Fatal("game with all players offline should close after OfflineRoomTTL")
 	}
 }
+
+func TestJoin_RoomFull(t *testing.T) {
+	r := NewRoom("TEST", nil)
+	for i := 0; i < MaxPlayers; i++ {
+		mustJoin(t, r, &mockClient{id: string(rune('a' + i))}, "P", "")
+	}
+	if _, err := r.Join(&mockClient{id: "late"}, "Late", ""); err != ErrRoomFull {
+		t.Errorf("expected ErrRoomFull, got %v", err)
+	}
+}

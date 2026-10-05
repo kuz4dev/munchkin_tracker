@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"munchkin-tracker-server/internal/api"
+	"munchkin-tracker-server/internal/clientip"
 	"munchkin-tracker-server/internal/room"
 	"munchkin-tracker-server/internal/store"
 	"munchkin-tracker-server/internal/ws"
@@ -48,6 +50,10 @@ func main() {
 		port = "8080"
 	}
 	origins := allowedOrigins()
+	realIP, err := clientIPMiddleware()
+	if err != nil {
+		log.Fatalf("client IP: %v", err)
+	}
 
 	hub := ws.NewHub()
 	root := chi.NewRouter()
@@ -55,19 +61,32 @@ func main() {
 	// Polled by the platform every few seconds, so kept out of the request log.
 	root.Get("/healthz", api.Health(st))
 	root.Group(func(r chi.Router) {
-		r.Use(middleware.RealIP)
+		r.Use(realIP)
 		r.Use(middleware.Logger)
+		r.Use(securityHeaders)
 		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   origins,
-			AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-			AllowedHeaders:   []string{"Content-Type"},
-			AllowCredentials: true,
+			AllowedOrigins: origins,
+			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+			AllowedHeaders: []string{"Content-Type"},
+			// No cookies or auth headers are used, so none are allowed.
+			AllowCredentials: false,
 		}))
 		api.RegisterRoutes(r, manager, st)
 		r.Get("/ws", ws.HandleWebSocket(manager, hub, origins))
 	})
 
-	srv := &http.Server{Addr: ":" + port, Handler: root}
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: root,
+		// Without these a client can hold connections open forever by sending
+		// headers byte by byte (Slowloris). WebSockets are unaffected: the
+		// upgrade clears these deadlines and sets its own.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
+	}
 	go func() {
 		log.Printf("server starting on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -108,6 +127,40 @@ func openStore(ctx context.Context) (store.Store, error) {
 	}
 	log.Println("connected to Postgres")
 	return pg, nil
+}
+
+// clientIPMiddleware decides where the client IP for rate limiting comes from:
+//
+//	CLIENT_IP_HEADER unset             TCP peer address (direct exposure)
+//	CLIENT_IP_HEADER=X-Forwarded-For   entry added by our proxies; set
+//	                                   TRUSTED_PROXY_HOPS to their number (default 1)
+//	CLIENT_IP_HEADER=<other header>    a header our proxy always overwrites
+//
+// Trusting a header the platform doesn't overwrite lets clients bypass rate
+// limits, so check what the hosting platform sets before configuring this.
+func clientIPMiddleware() (func(http.Handler) http.Handler, error) {
+	hops := 1
+	if raw := os.Getenv("TRUSTED_PROXY_HOPS"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, err
+		}
+		hops = n
+	}
+	return clientip.Middleware(os.Getenv("CLIENT_IP_HEADER"), hops)
+}
+
+// securityHeaders hardens API responses. They are JSON for scripts, never
+// pages, so browsers must not sniff them as HTML or frame them.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func allowedOrigins() []string {

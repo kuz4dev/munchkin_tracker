@@ -1,13 +1,14 @@
 package ws
 
 import (
+	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
+	"munchkin-tracker-server/internal/clientip"
 	"munchkin-tracker-server/internal/room"
 )
 
@@ -30,23 +31,26 @@ func HandleWebSocket(manager *room.Manager, hub *Hub, allowedOrigins []string) h
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip := clientip.FromRequest(r)
+		if err := hub.acquire(ip); err != nil {
+			status := http.StatusTooManyRequests
+			if errors.Is(err, errShuttingDown) {
+				status = http.StatusServiceUnavailable
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
+			hub.release(ip)
 			log.Printf("ws upgrade error: %v", err)
 			return
 		}
 
-		clientID := uuid.New().String()
-		client := NewClient(clientID, conn, manager, hub)
-		if !hub.add(client) {
-			conn.WriteControl(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "server restarting"),
-				time.Now().Add(time.Second))
-			conn.Close()
-			return
-		}
-
-		log.Printf("new ws connection: %s", clientID)
+		client := NewClient(uuid.NewString(), ip, conn, manager, hub)
+		hub.register(client)
+		log.Printf("new ws connection: %s", client.id)
 
 		go client.WritePump()
 		go client.ReadPump()
