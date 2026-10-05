@@ -60,6 +60,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 3, gearBonus: 2, gender: 'male', race: 'human', class: 'warrior' },
@@ -67,8 +69,8 @@ describe('useRoomStore', () => {
       })
 
       expect(store.allPlayers).toHaveLength(2)
-      // When playerId is empty, it gets set to the last player's id
-      expect(store.playerId).toBe('p2')
+      expect(store.playerId).toBe('p1')
+      expect(store.sessionId).toBe('sess-1')
     })
 
     it('room_state clears previous players', () => {
@@ -78,6 +80,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -86,6 +90,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p3', name: 'Charlie', level: 2, gearBonus: 1, gender: 'male', race: 'dwarf', class: 'thief' },
         ],
@@ -95,21 +101,35 @@ describe('useRoomStore', () => {
       expect(store.allPlayers[0]!.name).toBe('Charlie')
     })
 
-    it('does not overwrite playerId if already set', () => {
+    it('takes own identity from the server, not from player order', () => {
       const store = useRoomStore()
-      store.playerId = 'p1'
       const handler = getMessageHandler()
 
+      // We are p1 even though p2 is last in the list
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 3, gearBonus: 2, gender: 'male', race: 'human', class: 'warrior' },
         ],
       })
 
-      expect(store.playerId).toBe('p1')
+      expect(store.currentPlayer?.name).toBe('Alice')
+    })
+
+    it('updates playerId after reconnect (server assigns a new ID)', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+      const alice = { name: 'Alice', level: 4, gearBonus: 0, gender: 'female' as const, race: 'elf' as const, class: 'wizard' as const }
+
+      handler({ type: 'room_state', roomCode: 'ABC123', playerId: 'p1', sessionId: 'sess-1', players: [{ id: 'p1', ...alice }] })
+      handler({ type: 'room_state', roomCode: 'ABC123', playerId: 'p1-new', sessionId: 'sess-1', players: [{ id: 'p1-new', ...alice }] })
+
+      expect(store.playerId).toBe('p1-new')
+      expect(store.currentPlayer?.level).toBe(4)
     })
 
     it('handles player_joined message', () => {
@@ -130,6 +150,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 3, gearBonus: 2, gender: 'male', race: 'human', class: 'warrior' },
@@ -149,21 +171,23 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 1, gearBonus: 0, gender: 'male', race: 'human', class: 'none' },
         ],
       })
 
-      // p2 is the current player (last in list), so p1 update should apply
+      // p1 is the current player, so update the other one
       handler({
         type: 'player_updated',
-        player: { id: 'p1', name: 'Alice', level: 5, gearBonus: 3, gender: 'female', race: 'elf', class: 'wizard' },
+        player: { id: 'p2', name: 'Bob', level: 5, gearBonus: 3, gender: 'male', race: 'human', class: 'none' },
       })
 
-      const alice = store.players.get('p1')
-      expect(alice!.level).toBe(5)
-      expect(alice!.gearBonus).toBe(3)
+      const bob = store.players.get('p2')
+      expect(bob!.level).toBe(5)
+      expect(bob!.gearBonus).toBe(3)
     })
 
     it('ignores player_updated for own player (optimistic update)', () => {
@@ -173,6 +197,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 3, gearBonus: 2, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -190,7 +216,7 @@ describe('useRoomStore', () => {
     })
 
     it('handles error message', () => {
-      const store = useRoomStore()
+      useRoomStore()
       const handler = getMessageHandler()
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -199,6 +225,36 @@ describe('useRoomStore', () => {
       expect(consoleSpy).toHaveBeenCalledWith('Server error:', 'Test error')
       consoleSpy.mockRestore()
     })
+
+    it('room not found: clears session and leaves room with a notice', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      localStorage.setItem('munchkin_session', JSON.stringify({ roomCode: 'ABC123', playerName: 'A', sessionId: 's' }))
+      store.roomCode = 'ABC123'
+
+      handler({ type: 'error', message: 'room not found' })
+
+      expect(store.roomCode).toBe('')
+      expect(store.notice).not.toBe('')
+      expect(localStorage.getItem('munchkin_session')).toBeNull()
+      expect(mockWs.disconnect).toHaveBeenCalled()
+    })
+
+    it('session replaced: leaves room but keeps stored session for the other tab', () => {
+      const store = useRoomStore()
+      const handler = getMessageHandler()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      localStorage.setItem('munchkin_session', JSON.stringify({ roomCode: 'ABC123', playerName: 'A', sessionId: 's' }))
+      store.roomCode = 'ABC123'
+
+      handler({ type: 'error', message: 'session replaced' })
+
+      expect(store.roomCode).toBe('')
+      expect(store.notice).not.toBe('')
+      expect(localStorage.getItem('munchkin_session')).not.toBeNull()
+      expect(mockWs.disconnect).toHaveBeenCalled()
+    })
   })
 
   describe('computed properties', () => {
@@ -206,10 +262,11 @@ describe('useRoomStore', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()
 
-      store.playerId = 'p1'
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 3, gearBonus: 2, gender: 'male', race: 'human', class: 'warrior' },
@@ -223,10 +280,11 @@ describe('useRoomStore', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()
 
-      store.playerId = 'p1'
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
           { id: 'p2', name: 'Bob', level: 3, gearBonus: 2, gender: 'male', race: 'human', class: 'warrior' },
@@ -269,10 +327,11 @@ describe('useRoomStore', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()
 
-      store.playerId = 'p1'
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -281,6 +340,11 @@ describe('useRoomStore', () => {
       store.updateStats({ level: 5 })
 
       expect(store.currentPlayer?.level).toBe(5)
+      // Only editable stats are sent — never id/name
+      expect(mockWs.send).toHaveBeenCalledWith({
+        type: 'update_stats',
+        player: { level: 5, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
+      })
     })
 
     it('does nothing if no current player', () => {
@@ -296,11 +360,12 @@ describe('useRoomStore', () => {
       const store = useRoomStore()
       const handler = getMessageHandler()
 
-      store.playerId = 'p1'
       store.roomCode = 'ABC123'
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -320,6 +385,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -342,6 +409,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -363,6 +432,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],
@@ -398,6 +469,8 @@ describe('useRoomStore', () => {
       handler({
         type: 'room_state',
         roomCode: 'ABC123',
+        playerId: 'p1',
+        sessionId: 'sess-1',
         players: [
           { id: 'p1', name: 'Alice', level: 1, gearBonus: 0, gender: 'female', race: 'elf', class: 'wizard' },
         ],

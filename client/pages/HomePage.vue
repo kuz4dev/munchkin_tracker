@@ -1,12 +1,28 @@
 <script setup lang="ts">
+import { onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useRoomForm } from '@/composables/useRoomForm'
+import { useRoomStore } from '@/stores/room'
+import { MAX_NAME_LENGTH } from '@/constants'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 
-const { playerName, roomCodeInput, loading, error, handleCreate, handleJoin } = useRoomForm()
+const route = useRoute()
+const roomStore = useRoomStore()
+
+// Shared links (/room/CODE) redirect here with ?code=CODE prefilled
+const initialCode = typeof route.query.code === 'string' ? route.query.code.toUpperCase() : ''
+const { playerName, roomCodeInput, loading, error, handleCreate, handleJoin } = useRoomForm(initialCode)
+
+if (roomStore.notice) {
+  error.value = roomStore.notice
+}
+onUnmounted(() => {
+  roomStore.notice = ''
+})
 </script>
 
 <template>
@@ -40,7 +56,8 @@ const { playerName, roomCodeInput, loading, error, handleCreate, handleJoin } = 
             placeholder="Введите имя игрока"
             class="h-12 text-base"
             autocomplete="off"
-            @keyup.enter="handleCreate"
+            :maxlength="MAX_NAME_LENGTH"
+            @keyup.enter="roomCodeInput ? handleJoin() : handleCreate()"
           />
         </div>
 
@@ -84,6 +101,7 @@ const { playerName, roomCodeInput, loading, error, handleCreate, handleJoin } = 
             <Button
               variant="outline"
               class="h-12 px-5 text-base font-semibold shrink-0"
+              :disabled="loading"
               @click="handleJoin"
             >
               Войти

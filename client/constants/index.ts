@@ -1,1 +1,11 @@
-export { RACES, CLASSES, GENDERS, FIELD_LABELS } from './game'
+export {
+  RACES,
+  CLASSES,
+  GENDERS,
+  FIELD_LABELS,
+  MIN_LEVEL,
+  MAX_LEVEL,
+  MIN_GEAR_BONUS,
+  MAX_GEAR_BONUS,
+  MAX_NAME_LENGTH,
+} from './game'

@@ -38,7 +38,8 @@ if (!roomStore.roomCode) {
     rejoining.value = true
     tryRejoin(session.roomCode, session.playerName, session.sessionId)
   } else {
-    router.replace({ name: 'home' })
+    // Opened via a shared link: ask for a name with the code prefilled
+    router.replace({ name: 'home', query: routeCode ? { code: routeCode } : {} })
   }
 }
 
@@ -55,6 +56,7 @@ async function tryRejoin(code: string, name: string, sessionId: string) {
     roomStore.rejoinRoom(code, name, sessionId)
   } catch {
     clearSession()
+    roomStore.notice = 'Комната не найдена или уже закрыта'
     router.replace({ name: 'home' })
   } finally {
     rejoining.value = false

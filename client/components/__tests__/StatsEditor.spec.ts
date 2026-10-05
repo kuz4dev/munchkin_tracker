@@ -42,6 +42,8 @@ function setupPlayerInStore(player: Player) {
   handler({
     type: 'room_state',
     roomCode: 'ABC',
+    playerId: player.id,
+    sessionId: 'sess-1',
     players: [player],
   })
   return roomStore
@@ -80,10 +82,6 @@ describe('StatsEditor', () => {
     const wrapper = mount(StatsEditor)
 
     const buttons = wrapper.findAll('button')
-    // First button in the level section is the decrement button
-    const levelDecrementBtn = buttons.find(
-      (btn) => btn.text() === '−' && btn.element.closest('.bg-secondary\\/50'),
-    )
     // Find by disabled attribute among minus buttons
     const disabledMinusButtons = buttons.filter(
       (btn) => btn.text() === '−' && btn.attributes('disabled') !== undefined,

@@ -42,6 +42,8 @@ function setupPlayerInStore(player: Player) {
   handler({
     type: 'room_state',
     roomCode: 'ABC',
+    playerId: player.id,
+    sessionId: 'sess-1',
     players: [player],
   })
   return roomStore

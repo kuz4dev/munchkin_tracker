@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useRoomStore } from '@/stores/room'
-import type { Player } from '@/types'
+import { MAX_GEAR_BONUS, MAX_LEVEL, MIN_GEAR_BONUS, MIN_LEVEL } from '@/constants'
+import type { PlayerStats } from '@/types'
 
 export function usePlayerStats() {
   const roomStore = useRoomStore()
@@ -12,17 +13,17 @@ export function usePlayerStats() {
 
   function changeLevel(delta: number) {
     if (!player.value) return
-    const newLevel = Math.max(1, Math.min(10, player.value.level + delta))
+    const newLevel = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, player.value.level + delta))
     roomStore.updateStats({ level: newLevel })
   }
 
   function changeGear(delta: number) {
     if (!player.value) return
-    const newGear = Math.max(0, player.value.gearBonus + delta)
+    const newGear = Math.max(MIN_GEAR_BONUS, Math.min(MAX_GEAR_BONUS, player.value.gearBonus + delta))
     roomStore.updateStats({ gearBonus: newGear })
   }
 
-  function updateAttribute<K extends keyof Player>(key: K, value: Player[K]) {
+  function updateAttribute<K extends keyof PlayerStats>(key: K, value: PlayerStats[K]) {
     roomStore.updateStats({ [key]: value })
   }
 

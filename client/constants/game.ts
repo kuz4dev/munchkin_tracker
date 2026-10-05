@@ -1,5 +1,12 @@
 import type { Player } from '@/types'
 
+// Keep in sync with server/internal/models/models.go
+export const MIN_LEVEL = 1
+export const MAX_LEVEL = 10
+export const MIN_GEAR_BONUS = 0
+export const MAX_GEAR_BONUS = 999
+export const MAX_NAME_LENGTH = 24
+
 export const RACES: { value: Player['race']; label: string }[] = [
   { value: 'human', label: 'Человек' },
   { value: 'elf', label: 'Эльф' },

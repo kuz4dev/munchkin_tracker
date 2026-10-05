@@ -24,9 +24,10 @@ vi.mock('@/composables/useWebSocket', () => ({
 
 vi.mock('@/services/roomApi', () => ({
   createRoom: vi.fn(),
+  getRoomInfo: vi.fn(),
 }))
 
-import { createRoom as apiCreateRoom } from '@/services/roomApi'
+import { createRoom as apiCreateRoom, getRoomInfo } from '@/services/roomApi'
 
 describe('useRoomForm', () => {
   beforeEach(() => {
@@ -94,42 +95,63 @@ describe('useRoomForm', () => {
   })
 
   describe('handleJoin', () => {
-    it('sets error when name is empty', () => {
+    it('sets error when name is empty', async () => {
       const { handleJoin, error } = useRoomForm()
 
-      handleJoin()
+      await handleJoin()
 
       expect(error.value).toBe('Введите ваше имя')
     })
 
-    it('sets error when room code is empty', () => {
+    it('sets error when room code is empty', async () => {
       const { handleJoin, playerName, error } = useRoomForm()
       playerName.value = 'Bob'
 
-      handleJoin()
+      await handleJoin()
 
       expect(error.value).toBe('Введите код комнаты')
     })
 
-    it('uppercases room code and navigates', () => {
+    it('uppercases room code and navigates', async () => {
+      vi.mocked(getRoomInfo).mockResolvedValue({ code: 'ABC123', playerCount: 1 })
       const { handleJoin, playerName, roomCodeInput, error } = useRoomForm()
       playerName.value = 'Bob'
       roomCodeInput.value = 'abc123'
 
-      handleJoin()
+      await handleJoin()
 
       expect(error.value).toBe('')
       expect(mockPush).toHaveBeenCalledWith({ name: 'room', params: { code: 'ABC123' } })
     })
 
-    it('trims input values', () => {
+    it('trims input values', async () => {
+      vi.mocked(getRoomInfo).mockResolvedValue({ code: 'ABC123', playerCount: 1 })
       const { handleJoin, playerName, roomCodeInput } = useRoomForm()
       playerName.value = '  Bob  '
       roomCodeInput.value = '  abc123  '
 
-      handleJoin()
+      await handleJoin()
 
+      expect(getRoomInfo).toHaveBeenCalledWith('ABC123')
       expect(mockPush).toHaveBeenCalledWith({ name: 'room', params: { code: 'ABC123' } })
+    })
+
+    it('shows error and stays on page when room does not exist', async () => {
+      vi.mocked(getRoomInfo).mockRejectedValue(new Error('404'))
+      const { handleJoin, playerName, roomCodeInput, error, loading } = useRoomForm()
+      playerName.value = 'Bob'
+      roomCodeInput.value = 'NOPE00'
+
+      await handleJoin()
+
+      expect(error.value).toBe('Комната не найдена')
+      expect(loading.value).toBe(false)
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+
+    it('prefills room code from a shared link', () => {
+      const { roomCodeInput } = useRoomForm('ABC123')
+      expect(roomCodeInput.value).toBe('ABC123')
     })
   })
 })

@@ -3,7 +3,11 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
 import { createRoom as apiCreateRoom } from '@/services/roomApi'
 import { saveSession, clearSession } from '@/services/sessionStorage'
-import type { ChangeLogEntry, Player, ServerMessage } from '@/types'
+import type { ChangeLogEntry, Player, PlayerStats, ServerMessage } from '@/types'
+
+/** Server error messages the client reacts to (see server/internal/room). */
+const ERR_ROOM_NOT_FOUND = 'room not found'
+const ERR_SESSION_REPLACED = 'session replaced'
 
 export const useRoomStore = defineStore('room', () => {
   const connection = useConnectionStore()
@@ -14,6 +18,8 @@ export const useRoomStore = defineStore('room', () => {
   const sessionId = ref('')
   const players = reactive(new Map<string, Player>())
   const changelog = ref<ChangeLogEntry[]>([])
+  /** User-facing reason the room was closed, shown on the home page */
+  const notice = ref('')
   let joinedOnce = false // prevents watcher from double-sending join_room
 
   const connected = computed(() => connection.isConnected)
@@ -51,24 +57,10 @@ export const useRoomStore = defineStore('room', () => {
           players.set(p.id, p)
         }
         changelog.value = msg.changeLog ?? []
-        if (msg.players.length > 0 && !playerId.value) {
-          // If we have a sessionId (rejoin), find our player by it
-          if (sessionId.value) {
-            const self = msg.players.find((p) => p.sessionId === sessionId.value)
-            if (self) {
-              playerId.value = self.id
-            }
-          }
-          // Fallback: take the last player (new join — we're always last)
-          if (!playerId.value) {
-            playerId.value = msg.players[msg.players.length - 1]!.id
-          }
-        }
-        // Extract sessionId from our own player and persist
-        const self = players.get(playerId.value)
-        if (self?.sessionId) {
-          sessionId.value = self.sessionId
-        }
+        // The server tells us who we are. Our ID changes on every reconnect.
+        playerId.value = msg.playerId
+        sessionId.value = msg.sessionId
+        roomCode.value = msg.roomCode
         if (roomCode.value && playerName.value && sessionId.value) {
           saveSession({
             roomCode: roomCode.value,
@@ -102,20 +94,35 @@ export const useRoomStore = defineStore('room', () => {
 
       case 'error':
         console.error('Server error:', msg.message)
-        if (msg.message === 'room not found' && roomCode.value) {
+        if (msg.message === ERR_ROOM_NOT_FOUND && roomCode.value) {
           clearSession()
-          connection.disconnect()
-          roomCode.value = ''
-          playerId.value = ''
-          sessionId.value = ''
+          resetState()
+          notice.value = 'Комната не найдена или уже закрыта'
+        } else if (msg.message === ERR_SESSION_REPLACED) {
+          // Another tab/device took over this session. Don't clear the stored
+          // session (it belongs to the other tab now) and don't reconnect,
+          // or the two connections would keep stealing it from each other.
+          resetState()
+          notice.value = 'Вы подключились к комнате с другой вкладки или устройства'
         }
         break
     }
   }
 
+  function resetState() {
+    connection.disconnect()
+    players.clear()
+    changelog.value = []
+    roomCode.value = ''
+    playerId.value = ''
+    sessionId.value = ''
+    joinedOnce = false
+  }
+
   async function createRoom(name: string): Promise<string> {
     const data = await apiCreateRoom()
 
+    notice.value = ''
     playerName.value = name
     roomCode.value = data.code
     await connectToRoom(data.code, name)
@@ -124,6 +131,7 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   function joinRoom(code: string, name: string) {
+    notice.value = ''
     playerName.value = name
     roomCode.value = code
     connectToRoom(code, name)
@@ -148,7 +156,7 @@ export const useRoomStore = defineStore('room', () => {
     joinedOnce = true
   }
 
-  function updateStats(stats: Partial<Player>) {
+  function updateStats(stats: Partial<PlayerStats>) {
     const current = currentPlayer.value
     if (!current) return
 
@@ -157,19 +165,19 @@ export const useRoomStore = defineStore('room', () => {
 
     connection.send({
       type: 'update_stats',
-      player: updated,
+      player: {
+        level: updated.level,
+        gearBonus: updated.gearBonus,
+        gender: updated.gender,
+        race: updated.race,
+        class: updated.class,
+      },
     })
   }
 
   function leaveRoom() {
     connection.send({ type: 'leave_room' })
-    connection.disconnect()
-    players.clear()
-    changelog.value = []
-    roomCode.value = ''
-    playerId.value = ''
-    sessionId.value = ''
-    joinedOnce = false
+    resetState()
     clearSession()
   }
 
@@ -180,6 +188,7 @@ export const useRoomStore = defineStore('room', () => {
     sessionId,
     players,
     changelog,
+    notice,
     connected,
     currentPlayer,
     otherPlayers,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePlayerStats } from '@/composables/usePlayerStats'
-import { CLASSES, GENDERS, RACES } from '@/constants'
-import type { Player } from '@/types'
+import { CLASSES, GENDERS, MAX_GEAR_BONUS, MAX_LEVEL, MIN_GEAR_BONUS, MIN_LEVEL, RACES } from '@/constants'
+import type { PlayerStats } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -16,8 +16,8 @@ import {
 
 const { player, power, changeLevel, changeGear, updateAttribute } = usePlayerStats()
 
-function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
-  if (typeof value === 'string') updateAttribute(key, value as Player[K])
+function onSelectUpdate<K extends keyof PlayerStats>(key: K, value: unknown) {
+  if (typeof value === 'string') updateAttribute(key, value as PlayerStats[K])
 }
 </script>
 
@@ -48,7 +48,7 @@ function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
               variant="outline"
               size="icon"
               class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl text-lg font-bold shrink-0 active:scale-90 transition-transform"
-              :disabled="player.level <= 1"
+              :disabled="player.level <= MIN_LEVEL"
               @click="changeLevel(-1)"
             >
               −
@@ -60,7 +60,7 @@ function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
               variant="outline"
               size="icon"
               class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl text-lg font-bold shrink-0 active:scale-90 transition-transform"
-              :disabled="player.level >= 10"
+              :disabled="player.level >= MAX_LEVEL"
               @click="changeLevel(1)"
             >
               +
@@ -76,7 +76,7 @@ function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
               variant="outline"
               size="icon"
               class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl text-lg font-bold shrink-0 active:scale-90 transition-transform"
-              :disabled="player.gearBonus <= 0"
+              :disabled="player.gearBonus <= MIN_GEAR_BONUS"
               @click="changeGear(-1)"
             >
               −
@@ -88,6 +88,7 @@ function onSelectUpdate<K extends keyof Player>(key: K, value: unknown) {
               variant="outline"
               size="icon"
               class="h-10 w-10 sm:h-11 sm:w-11 rounded-xl text-lg font-bold shrink-0 active:scale-90 transition-transform"
+              :disabled="player.gearBonus >= MAX_GEAR_BONUS"
               @click="changeGear(1)"
             >
               +

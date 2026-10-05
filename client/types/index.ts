@@ -1,12 +1,15 @@
-export interface Player {
-  id: string
-  sessionId?: string
-  name: string
+/** Fields a player is allowed to change about themselves. */
+export interface PlayerStats {
   level: number
   gearBonus: number
   gender: 'male' | 'female'
   race: 'human' | 'elf' | 'dwarf' | 'halfling'
   class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric'
+}
+
+export interface Player extends PlayerStats {
+  id: string
+  name: string
 }
 
 export interface ChangeLogEntry {
@@ -30,6 +33,10 @@ export interface RoomStateMessage {
   type: 'room_state'
   roomCode: string
   players: Player[]
+  /** The recipient's own player ID */
+  playerId: string
+  /** The recipient's secret reconnect token (never sent to other players) */
+  sessionId: string
   changeLog?: ChangeLogEntry[]
 }
 
@@ -75,7 +82,7 @@ export interface OutgoingJoinMessage {
 
 export interface OutgoingUpdateMessage {
   type: 'update_stats'
-  player: Omit<Player, 'id'>
+  player: PlayerStats
 }
 
 export interface OutgoingLeaveMessage {

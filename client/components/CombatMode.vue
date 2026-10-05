@@ -72,11 +72,16 @@ function onEnemyInput(val: string) {
   enemyPower.value = isNaN(num) ? null : num
 }
 
-function onPlayerChange(val: string) {
+function onPlayerChange(val: unknown) {
+  if (typeof val !== 'string') return
   selectedPlayerId.value = val
   if (allyId.value === val) {
     allyId.value = NO_ALLY
   }
+}
+
+function onAllyChange(val: unknown) {
+  allyId.value = typeof val === 'string' ? val : NO_ALLY
 }
 
 function formatBonus(n: number) {
@@ -84,6 +89,17 @@ function formatBonus(n: number) {
   if (n < 0) return `${n}`
   return '0'
 }
+
+// Игрок вышел из комнаты (или переподключился с новым ID) — сбрасываем выбор
+watch(allPlayers, (players) => {
+  if (selectedPlayerId.value && !players.some(p => p.id === selectedPlayerId.value)) {
+    selectedPlayerId.value = ''
+    allyId.value = NO_ALLY
+  }
+  if (allyId.value !== NO_ALLY && !players.some(p => p.id === allyId.value)) {
+    allyId.value = NO_ALLY
+  }
+})
 
 // Сбрасываем состояние когда диалог закрывается
 watch(() => props.open, (val) => {
@@ -119,7 +135,7 @@ watch(() => props.open, (val) => {
     <!-- Выбор союзника -->
     <div v-if="selectedPlayerId" class="space-y-1.5">
       <Label>Союзник <span class="text-muted-foreground text-xs font-normal">(необязательно)</span></Label>
-      <Select :model-value="allyId" @update:model-value="allyId = $event">
+      <Select :model-value="allyId" @update:model-value="onAllyChange">
         <SelectTrigger>
           <SelectValue placeholder="Без союзника" />
         </SelectTrigger>
