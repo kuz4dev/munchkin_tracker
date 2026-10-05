@@ -12,6 +12,7 @@ interface ChangeLogGroup {
   /** First entry's timestamp (used for display) */
   timestamp: number
   /** Player who made the changes */
+  playerId: string
   playerName: string
   /** For stat_change groups: the field that changed */
   field?: string
@@ -19,8 +20,8 @@ interface ChangeLogGroup {
   firstOldValue?: string
   /** For stat_change groups: last entry's newValue */
   lastNewValue?: string
-  /** Event type: join/leave are never grouped, stat_change can be */
-  eventType: 'join' | 'leave' | 'stat_change'
+  /** Event type: only stat_change entries are grouped */
+  eventType: ChangeLogEntry['eventType']
   /** All individual entries in this group */
   entries: ChangeLogEntry[]
 }
@@ -49,7 +50,7 @@ const groups = computed<ChangeLogGroup[]>(() => {
       prev
       && prev.eventType === 'stat_change'
       && entry.eventType === 'stat_change'
-      && prev.playerName === entry.playerName
+      && prev.playerId === entry.playerId
       && prev.field === entry.field
     ) {
       prev.entries.push(entry)
@@ -60,6 +61,7 @@ const groups = computed<ChangeLogGroup[]>(() => {
     // Start a new group
     result.push({
       timestamp: entry.timestamp,
+      playerId: entry.playerId,
       playerName: entry.playerName,
       eventType: entry.eventType,
       field: entry.field,
@@ -72,19 +74,43 @@ const groups = computed<ChangeLogGroup[]>(() => {
   return result
 })
 
-// Auto-scroll to bottom when new groups arrive and panel is open
-watch(() => groups.value.length, async () => {
+// Auto-scroll to bottom when a new event arrives and panel is open
+// (not when older history is prepended)
+watch(() => roomStore.changelog[roomStore.changelog.length - 1]?.seq, async () => {
   if (isOpen.value && scrollContainer.value) {
     await nextTick()
     scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight
   }
 })
 
-function toggleGroup(index: number) {
-  if (expandedGroups.has(index)) {
-    expandedGroups.delete(index)
+const loadError = ref(false)
+
+async function loadOlder() {
+  const el = scrollContainer.value
+  const heightBefore = el?.scrollHeight ?? 0
+  loadError.value = false
+  try {
+    await roomStore.loadOlder()
+  } catch {
+    loadError.value = true
+    return
+  }
+  // Keep the entries the user was looking at in place
+  await nextTick()
+  if (el) el.scrollTop += el.scrollHeight - heightBefore
+}
+
+/** Groups are identified by their first event's seq, which survives prepending history */
+function groupKey(group: ChangeLogGroup): number {
+  return group.entries[0]!.seq
+}
+
+function toggleGroup(group: ChangeLogGroup) {
+  const key = groupKey(group)
+  if (expandedGroups.has(key)) {
+    expandedGroups.delete(key)
   } else {
-    expandedGroups.add(index)
+    expandedGroups.add(key)
   }
 }
 
@@ -96,6 +122,10 @@ function formatGroupSummary(group: ChangeLogGroup): string {
   }
   if (group.eventType === 'leave') {
     return `${name} вышел`
+  }
+  if (group.eventType === 'finish') {
+    const winner = group.lastNewValue
+    return winner ? `🏆 Игра окончена, победитель: ${winner}` : '🏁 Игра окончена без победителя'
   }
 
   // stat_change
@@ -184,9 +214,18 @@ const totalEntries = computed(() => roomStore.changelog.length)
           ref="scrollContainer"
           class="max-h-60 overflow-y-auto px-4 pb-3 space-y-0.5"
         >
+          <div v-if="roomStore.hasOlder" class="text-center py-1">
+            <button
+              class="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline cursor-pointer disabled:opacity-50"
+              :disabled="roomStore.loadingOlder"
+              @click="loadOlder"
+            >
+              {{ roomStore.loadingOlder ? 'Загрузка…' : loadError ? 'Не удалось загрузить, повторить' : 'Показать более ранние' }}
+            </button>
+          </div>
           <div
-            v-for="(group, index) in groups"
-            :key="index"
+            v-for="group in groups"
+            :key="groupKey(group)"
           >
             <!-- Group summary row -->
             <div class="flex items-start gap-2 py-1 text-sm">
@@ -198,11 +237,11 @@ const totalEntries = computed(() => roomStore.changelog.length)
               <button
                 v-if="group.entries.length > 1"
                 class="flex items-center gap-1.5 text-left text-foreground hover:text-primary transition-colors cursor-pointer"
-                @click="toggleGroup(index)"
+                @click="toggleGroup(group)"
               >
                 <svg
                   class="w-3 h-3 shrink-0 text-muted-foreground transition-transform duration-150"
-                  :class="{ 'rotate-90': expandedGroups.has(index) }"
+                  :class="{ 'rotate-90': expandedGroups.has(groupKey(group)) }"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
                   fill="none"
@@ -227,7 +266,7 @@ const totalEntries = computed(() => roomStore.changelog.length)
 
             <!-- Expanded entries inside group -->
             <div
-              v-if="group.entries.length > 1 && expandedGroups.has(index)"
+              v-if="group.entries.length > 1 && expandedGroups.has(groupKey(group))"
               class="ml-[4.5rem] pl-3 border-l-2 border-secondary space-y-0.5 pb-1"
             >
               <div

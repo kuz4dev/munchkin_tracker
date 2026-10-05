@@ -11,12 +11,20 @@ defineProps<{
 </script>
 
 <template>
-  <Card class="overflow-hidden transition-all hover:shadow-md border-2">
+  <Card
+    class="overflow-hidden transition-all hover:shadow-md border-2"
+    :class="{ 'opacity-60': !player.connected }"
+  >
     <!-- Top bar: name + power -->
     <div class="flex items-center justify-between px-4 py-3 bg-secondary/40">
-      <h3 class="font-bold text-base truncate text-foreground mr-2">
-        {{ player.name }}
-      </h3>
+      <div class="min-w-0 mr-2">
+        <h3 class="font-bold text-base truncate text-foreground">
+          {{ player.name }}
+        </h3>
+        <p v-if="!player.connected" class="text-xs text-muted-foreground">
+          не в сети
+        </p>
+      </div>
       <div class="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-xl px-3 py-1.5 shrink-0">
         <span class="text-xl font-extrabold leading-none tabular-nums">{{ player.level + player.gearBonus }}</span>
         <span class="text-[10px] font-medium opacity-80">СИЛА</span>

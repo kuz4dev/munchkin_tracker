@@ -31,6 +31,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     gender: 'female',
     race: 'elf',
     class: 'wizard',
+    connected: true,
     ...overrides,
   }
 }

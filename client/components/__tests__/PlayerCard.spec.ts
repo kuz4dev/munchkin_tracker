@@ -12,6 +12,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     gender: 'female',
     race: 'elf',
     class: 'wizard',
+    connected: true,
     ...overrides,
   }
 }
@@ -22,6 +23,14 @@ describe('PlayerCard', () => {
       props: { player: makePlayer({ name: 'Bob' }) },
     })
     expect(wrapper.text()).toContain('Bob')
+  })
+
+  it('marks offline players', () => {
+    const offline = mount(PlayerCard, { props: { player: makePlayer({ connected: false }) } })
+    expect(offline.text()).toContain('не в сети')
+
+    const online = mount(PlayerCard, { props: { player: makePlayer({ connected: true }) } })
+    expect(online.text()).not.toContain('не в сети')
   })
 
   it('renders power (level + gearBonus)', () => {
@@ -61,7 +70,7 @@ describe('PlayerCard', () => {
 
   it('renders class label in Russian', () => {
     const wrapper = mount(PlayerCard, {
-      props: { player: makePlayer({ class: 'wizard' }) },
+      props: { player: makePlayer({ class: 'wizard', connected: true }) },
     })
     expect(wrapper.text()).toContain('Волшебник')
   })

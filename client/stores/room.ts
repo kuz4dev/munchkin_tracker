@@ -1,13 +1,19 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
-import { createRoom as apiCreateRoom } from '@/services/roomApi'
+import { createRoom as apiCreateRoom, getRoomEvents } from '@/services/roomApi'
 import { saveSession, clearSession } from '@/services/sessionStorage'
-import type { ChangeLogEntry, Player, PlayerStats, ServerMessage } from '@/types'
+import type { ChangeLogEntry, GameStatus, Player, PlayerStats, ServerMessage } from '@/types'
 
 /** Server error messages the client reacts to (see server/internal/room). */
 const ERR_ROOM_NOT_FOUND = 'room not found'
 const ERR_SESSION_REPLACED = 'session replaced'
+const ERR_GAME_FINISHED = 'game finished'
+const ERR_UNAVAILABLE = 'temporarily unavailable'
+const JOIN_RETRY_DELAY = 2000
+
+/** Max changelog entries kept on the client (live + loaded history) */
+const MAX_CHANGELOG = 1000
 
 export const useRoomStore = defineStore('room', () => {
   const connection = useConnectionStore()
@@ -20,7 +26,13 @@ export const useRoomStore = defineStore('room', () => {
   const changelog = ref<ChangeLogEntry[]>([])
   /** User-facing reason the room was closed, shown on the home page */
   const notice = ref('')
+  const status = ref<GameStatus>('active')
+  const winnerId = ref('')
+  const createdAt = ref(0)
+  const finishedAt = ref(0)
+  const loadingOlder = ref(false)
   let joinedOnce = false // prevents watcher from double-sending join_room
+  let joinRetry: ReturnType<typeof setTimeout> | null = null
 
   const connected = computed(() => connection.isConnected)
   const currentPlayer = computed(() => players.get(playerId.value))
@@ -34,6 +46,10 @@ export const useRoomStore = defineStore('room', () => {
     return result
   })
   const allPlayers = computed(() => Array.from(players.values()))
+  const isFinished = computed(() => status.value === 'finished')
+  /** Whether events older than the loaded ones exist (seq starts at 1) */
+  const hasOlder = computed(() => (changelog.value[0]?.seq ?? 1) > 1)
+  const winner = computed(() => (winnerId.value ? players.get(winnerId.value) : undefined))
 
   connection.onMessage(handleMessage)
 
@@ -61,6 +77,10 @@ export const useRoomStore = defineStore('room', () => {
         playerId.value = msg.playerId
         sessionId.value = msg.sessionId
         roomCode.value = msg.roomCode
+        status.value = msg.status
+        winnerId.value = msg.winnerId ?? ''
+        createdAt.value = msg.createdAt
+        finishedAt.value = msg.finishedAt ?? 0
         if (roomCode.value && playerName.value && sessionId.value) {
           saveSession({
             roomCode: roomCode.value,
@@ -87,14 +107,28 @@ export const useRoomStore = defineStore('room', () => {
 
       case 'changelog_entry':
         changelog.value.push(msg.changeLogEntry)
-        if (changelog.value.length > 100) {
-          changelog.value = changelog.value.slice(-100)
+        if (changelog.value.length > MAX_CHANGELOG) {
+          changelog.value = changelog.value.slice(-MAX_CHANGELOG)
         }
+        break
+
+      case 'game_finished':
+        status.value = msg.status
+        winnerId.value = msg.winnerId ?? ''
+        finishedAt.value = msg.finishedAt
         break
 
       case 'error':
         console.error('Server error:', msg.message)
-        if (msg.message === ERR_ROOM_NOT_FOUND && roomCode.value) {
+        if (msg.message === ERR_UNAVAILABLE && roomCode.value && !playerId.value) {
+          // The server couldn't load the game (database hiccup): try again
+          scheduleJoinRetry()
+        } else if (msg.message === ERR_GAME_FINISHED && roomCode.value && !playerId.value) {
+          // Tried to join a game that is already over
+          clearSession()
+          resetState()
+          notice.value = 'Эта игра уже завершена'
+        } else if (msg.message === ERR_ROOM_NOT_FOUND && roomCode.value) {
           clearSession()
           resetState()
           notice.value = 'Комната не найдена или уже закрыта'
@@ -109,13 +143,36 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
+  function scheduleJoinRetry() {
+    if (joinRetry) return
+    joinRetry = setTimeout(() => {
+      joinRetry = null
+      if (roomCode.value && playerName.value && !playerId.value && connection.isConnected) {
+        connection.send({
+          type: 'join_room',
+          roomCode: roomCode.value,
+          playerName: playerName.value,
+          sessionId: sessionId.value || undefined,
+        })
+      }
+    }, JOIN_RETRY_DELAY)
+  }
+
   function resetState() {
+    if (joinRetry) {
+      clearTimeout(joinRetry)
+      joinRetry = null
+    }
     connection.disconnect()
     players.clear()
     changelog.value = []
     roomCode.value = ''
     playerId.value = ''
     sessionId.value = ''
+    status.value = 'active'
+    winnerId.value = ''
+    createdAt.value = 0
+    finishedAt.value = 0
     joinedOnce = false
   }
 
@@ -175,6 +232,27 @@ export const useRoomStore = defineStore('room', () => {
     })
   }
 
+  /** Prepends the previous page of history to the changelog. */
+  async function loadOlder() {
+    const first = changelog.value[0]
+    if (!first || first.seq <= 1 || loadingOlder.value) return
+    loadingOlder.value = true
+    try {
+      const page = await getRoomEvents(roomCode.value, first.seq)
+      // The changelog may have been replaced (reconnect) while loading
+      const current = changelog.value[0]?.seq ?? Infinity
+      const older = page.events.filter((e) => e.seq < current)
+      changelog.value = [...older, ...changelog.value]
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
+  /** Ends the game for everyone. Omit winnerId to finish without a winner. */
+  function finishGame(winnerId?: string) {
+    connection.send({ type: 'finish_game', winnerId: winnerId || undefined })
+  }
+
   function leaveRoom() {
     connection.send({ type: 'leave_room' })
     resetState()
@@ -189,6 +267,14 @@ export const useRoomStore = defineStore('room', () => {
     players,
     changelog,
     notice,
+    status,
+    winnerId,
+    createdAt,
+    finishedAt,
+    isFinished,
+    winner,
+    hasOlder,
+    loadingOlder,
     connected,
     currentPlayer,
     otherPlayers,
@@ -197,6 +283,8 @@ export const useRoomStore = defineStore('room', () => {
     joinRoom,
     rejoinRoom,
     updateStats,
+    finishGame,
+    loadOlder,
     leaveRoom,
   }
 })

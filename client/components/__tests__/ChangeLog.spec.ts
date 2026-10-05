@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import ChangeLog from '../ChangeLog.vue'
 import { useRoomStore } from '@/stores/room'
@@ -20,11 +20,18 @@ vi.mock('@/composables/useWebSocket', () => ({
 
 vi.mock('@/services/roomApi', () => ({
   createRoom: vi.fn(),
+  getRoomEvents: vi.fn(),
 }))
+
+import { getRoomEvents } from '@/services/roomApi'
+
+let nextSeq = 1
 
 function makeEntry(overrides: Partial<ChangeLogEntry> = {}): ChangeLogEntry {
   return {
+    seq: nextSeq++,
     timestamp: Date.now(),
+    playerId: 'p-alice',
     playerName: 'Alice',
     eventType: 'join',
     ...overrides,
@@ -35,6 +42,61 @@ describe('ChangeLog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    nextSeq = 1
+  })
+
+  describe('history', () => {
+    it('hides "load earlier" when the first event is loaded', async () => {
+      const store = useRoomStore()
+      store.changelog = [makeEntry({ seq: 1 }), makeEntry({ seq: 2 })]
+      const wrapper = mount(ChangeLog)
+      await wrapper.find('button').trigger('click')
+      expect(wrapper.text()).not.toContain('Показать более ранние')
+    })
+
+    it('loads earlier events and keeps expanded groups', async () => {
+      const store = useRoomStore()
+      store.roomCode = 'ABC123'
+      const levelUp = (seq: number, from: number) =>
+        makeEntry({ seq, eventType: 'stat_change', field: 'level', oldValue: String(from), newValue: String(from + 1) })
+      store.changelog = [levelUp(51, 3), levelUp(52, 4)]
+      vi.mocked(getRoomEvents).mockResolvedValue({
+        events: [makeEntry({ seq: 49, playerName: 'Bob', eventType: 'join' }), makeEntry({ seq: 50, playerName: 'Bob', eventType: 'leave' })],
+        hasMore: true,
+      })
+
+      const wrapper = mount(ChangeLog)
+      await wrapper.find('button').trigger('click') // open panel
+      const group = wrapper.findAll('button').find((b) => b.text().includes('(2 изм.)'))!
+      await group.trigger('click') // expand the level group
+      expect(wrapper.text()).toContain('уровень 3 → 4')
+
+      const more = wrapper.findAll('button').find((b) => b.text() === 'Показать более ранние')!
+      await more.trigger('click')
+      await flushPromises()
+
+      expect(getRoomEvents).toHaveBeenCalledWith('ABC123', 51)
+      expect(store.changelog.map((e) => e.seq)).toEqual([49, 50, 51, 52])
+      expect(wrapper.text()).toContain('Bob присоединился')
+      // The same group is still expanded after prepending
+      expect(wrapper.text()).toContain('уровень 3 → 4')
+      expect(wrapper.text()).toContain('Показать более ранние')
+    })
+
+    it('offers a retry when loading fails', async () => {
+      const store = useRoomStore()
+      store.roomCode = 'ABC123'
+      store.changelog = [makeEntry({ seq: 10 })]
+      vi.mocked(getRoomEvents).mockRejectedValue(new Error('offline'))
+
+      const wrapper = mount(ChangeLog)
+      await wrapper.find('button').trigger('click')
+      await wrapper.findAll('button').find((b) => b.text() === 'Показать более ранние')!.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Не удалось загрузить, повторить')
+      expect(store.changelog).toHaveLength(1)
+    })
   })
 
   it('renders "Журнал" title', () => {
@@ -53,6 +115,20 @@ describe('ChangeLog', () => {
   it('does not show count badge when empty', () => {
     const wrapper = mount(ChangeLog)
     expect(wrapper.text()).not.toMatch(/\d+/)
+  })
+
+  it('formats finish entries', async () => {
+    const store = useRoomStore()
+    store.changelog = [
+      makeEntry({ seq: 1, eventType: 'finish', newValue: 'Bob' }),
+      makeEntry({ seq: 2, eventType: 'finish', newValue: '' }),
+    ]
+
+    const wrapper = mount(ChangeLog)
+    await wrapper.find('button').trigger('click')
+
+    expect(wrapper.text()).toContain('Игра окончена, победитель: Bob')
+    expect(wrapper.text()).toContain('Игра окончена без победителя')
   })
 
   it('formats join entry correctly', async () => {
@@ -191,8 +267,8 @@ describe('ChangeLog', () => {
     it('does not group entries from different players', async () => {
       const store = useRoomStore()
       store.changelog = [
-        makeEntry({ playerName: 'Igor', eventType: 'stat_change', field: 'level', oldValue: '1', newValue: '2', timestamp: 1000 }),
-        makeEntry({ playerName: 'Alice', eventType: 'stat_change', field: 'level', oldValue: '3', newValue: '4', timestamp: 1001 }),
+        makeEntry({ playerId: 'p-igor', playerName: 'Igor', eventType: 'stat_change', field: 'level', oldValue: '1', newValue: '2', timestamp: 1000 }),
+        makeEntry({ playerId: 'p-alice', playerName: 'Alice', eventType: 'stat_change', field: 'level', oldValue: '3', newValue: '4', timestamp: 1001 }),
       ]
 
       const wrapper = mount(ChangeLog)
@@ -201,6 +277,21 @@ describe('ChangeLog', () => {
       // Both should be separate lines, no "(N изм.)" text
       expect(wrapper.text()).toContain('Igor: уровень 1 → 2')
       expect(wrapper.text()).toContain('Alice: уровень 3 → 4')
+      expect(wrapper.text()).not.toContain('изм.')
+    })
+
+    it('does not group entries from different players with the same name', async () => {
+      const store = useRoomStore()
+      store.changelog = [
+        makeEntry({ playerId: 'p1', playerName: 'Igor', eventType: 'stat_change', field: 'level', oldValue: '1', newValue: '2', timestamp: 1000 }),
+        makeEntry({ playerId: 'p2', playerName: 'Igor', eventType: 'stat_change', field: 'level', oldValue: '3', newValue: '4', timestamp: 1001 }),
+      ]
+
+      const wrapper = mount(ChangeLog)
+      await wrapper.find('button').trigger('click')
+
+      expect(wrapper.text()).toContain('Igor: уровень 1 → 2')
+      expect(wrapper.text()).toContain('Igor: уровень 3 → 4')
       expect(wrapper.text()).not.toContain('изм.')
     })
 

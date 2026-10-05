@@ -8,20 +8,30 @@ export interface PlayerStats {
 }
 
 export interface Player extends PlayerStats {
+  /** Stable for the whole game, across reconnects */
   id: string
   name: string
+  /** False while the player's device is disconnected */
+  connected: boolean
 }
 
 export interface ChangeLogEntry {
+  /** Position of the event within its game, starting at 1 */
+  seq: number
   timestamp: number
+  playerId: string
   playerName: string
-  eventType: 'join' | 'leave' | 'stat_change'
+  /** For 'finish': newValue holds the winner's name (empty if none) */
+  eventType: 'join' | 'leave' | 'stat_change' | 'finish'
   field?: string
   oldValue?: string
   newValue?: string
 }
 
+export type GameStatus = 'active' | 'finished'
+
 export type IncomingMessageType =
+  | 'game_finished'
   | 'room_state'
   | 'player_joined'
   | 'player_left'
@@ -38,6 +48,19 @@ export interface RoomStateMessage {
   /** The recipient's secret reconnect token (never sent to other players) */
   sessionId: string
   changeLog?: ChangeLogEntry[]
+  status: GameStatus
+  winnerId?: string
+  /** Unix ms */
+  createdAt: number
+  /** Unix ms, only for finished games */
+  finishedAt?: number
+}
+
+export interface GameFinishedMessage {
+  type: 'game_finished'
+  status: 'finished'
+  winnerId?: string
+  finishedAt: number
 }
 
 export interface PlayerJoinedMessage {
@@ -71,6 +94,7 @@ export type ServerMessage =
   | PlayerLeftMessage
   | PlayerUpdatedMessage
   | ChangeLogEntryMessage
+  | GameFinishedMessage
   | ErrorMessage
 
 export interface OutgoingJoinMessage {
@@ -89,8 +113,15 @@ export interface OutgoingLeaveMessage {
   type: 'leave_room'
 }
 
+export interface OutgoingFinishMessage {
+  type: 'finish_game'
+  /** Omit to finish without a winner */
+  winnerId?: string
+}
+
 export type ClientMessage =
   | OutgoingJoinMessage
   | OutgoingUpdateMessage
   | OutgoingLeaveMessage
+  | OutgoingFinishMessage
 

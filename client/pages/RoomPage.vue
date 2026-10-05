@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Swords } from 'lucide-vue-next'
+import { Flag, Swords } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 import { useClipboard } from '@vueuse/core'
 import { useRoomStore } from '@/stores/room'
@@ -11,6 +11,9 @@ import StatsEditor from '@/components/StatsEditor.vue'
 import PlayerCard from '@/components/PlayerCard.vue'
 import ChangeLog from '@/components/ChangeLog.vue'
 import CombatMode from '@/components/CombatMode.vue'
+import FinishGameDialog from '@/components/FinishGameDialog.vue'
+import GameSummary from '@/components/GameSummary.vue'
+import { MAX_LEVEL } from '@/constants'
 import {
   Dialog,
   DialogTrigger,
@@ -28,6 +31,8 @@ const { copy } = useClipboard()
 
 const rejoining = ref(false)
 const combatOpen = ref(false)
+const finishOpen = ref(false)
+const suggestedWinnerId = ref('')
 
 if (!roomStore.roomCode) {
   // Not in a room from normal flow — try session restore
@@ -49,6 +54,23 @@ watch(() => roomStore.roomCode, (code) => {
     router.replace({ name: 'home' })
   }
 })
+
+// Reaching the last level: offer to finish the game with yourself as winner
+watch(() => roomStore.currentPlayer?.level, (level, previous) => {
+  if (previous !== undefined && level === MAX_LEVEL && previous < MAX_LEVEL && !roomStore.isFinished) {
+    openFinishDialog(roomStore.playerId)
+  }
+})
+
+function openFinishDialog(winnerId = '') {
+  suggestedWinnerId.value = winnerId
+  finishOpen.value = true
+}
+
+function leaveFinishedGame() {
+  roomStore.leaveRoom()
+  router.push({ name: 'home' })
+}
 
 async function tryRejoin(code: string, name: string, sessionId: string) {
   try {
@@ -84,6 +106,11 @@ function copyRoomCode() {
         </p>
       </div>
 
+      <template v-else-if="roomStore.roomCode && roomStore.isFinished">
+        <GameSummary @leave="leaveFinishedGame" />
+        <ChangeLog />
+      </template>
+
       <template v-else-if="roomStore.roomCode">
         <!-- Stats Editor for current player -->
         <StatsEditor />
@@ -107,6 +134,17 @@ function copyRoomCode() {
             <CombatMode :open="combatOpen" />
           </DialogContent>
         </Dialog>
+
+        <Button
+          variant="ghost"
+          class="w-full text-muted-foreground"
+          :disabled="!roomStore.connected"
+          @click="openFinishDialog()"
+        >
+          <Flag class="size-4" />
+          Завершить игру
+        </Button>
+        <FinishGameDialog v-model:open="finishOpen" :suggested-winner-id="suggestedWinnerId" />
 
         <!-- Other players -->
         <section v-if="roomStore.otherPlayers.length > 0">
