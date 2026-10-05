@@ -3,6 +3,7 @@ package ws
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -13,7 +14,7 @@ import (
 // HandleWebSocket upgrades connections from allowed origins. Requests without
 // an Origin header (native mobile apps, CLI tools) are allowed: Origin checks
 // only protect against cross-site use from browsers.
-func HandleWebSocket(manager *room.Manager, allowedOrigins []string) http.HandlerFunc {
+func HandleWebSocket(manager *room.Manager, hub *Hub, allowedOrigins []string) http.HandlerFunc {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		allowed[o] = true
@@ -36,7 +37,14 @@ func HandleWebSocket(manager *room.Manager, allowedOrigins []string) http.Handle
 		}
 
 		clientID := uuid.New().String()
-		client := NewClient(clientID, conn, manager)
+		client := NewClient(clientID, conn, manager, hub)
+		if !hub.add(client) {
+			conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "server restarting"),
+				time.Now().Add(time.Second))
+			conn.Close()
+			return
+		}
 
 		log.Printf("new ws connection: %s", clientID)
 

@@ -1,0 +1,24 @@
+# Local Postgres for development and tests:
+#   docker compose up -d db
+#   cd server && DATABASE_URL=postgres://munchkin:munchkin@localhost:5433/munchkin go run ./cmd/server
+#   cd server && TEST_DATABASE_URL=postgres://munchkin:munchkin@localhost:5433/munchkin_test go test ./...
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: munchkin
+      POSTGRES_PASSWORD: munchkin
+      POSTGRES_DB: munchkin
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./server/scripts/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U munchkin"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  db-data:

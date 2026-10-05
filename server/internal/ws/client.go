@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -21,6 +22,7 @@ const (
 
 type Client struct {
 	id        string
+	hub       *Hub
 	conn      *websocket.Conn
 	send      chan []byte
 	done      chan struct{}
@@ -29,9 +31,10 @@ type Client struct {
 	manager   *room.Manager
 }
 
-func NewClient(id string, conn *websocket.Conn, manager *room.Manager) *Client {
+func NewClient(id string, conn *websocket.Conn, manager *room.Manager, hub *Hub) *Client {
 	return &Client{
 		id:      id,
+		hub:     hub,
 		conn:    conn,
 		send:    make(chan []byte, 256),
 		done:    make(chan struct{}),
@@ -69,6 +72,7 @@ func (c *Client) ReadPump() {
 			c.room.Disconnect(c)
 		}
 		c.close()
+		c.hub.remove(c)
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -130,6 +134,8 @@ func (c *Client) handleMessage(data []byte) {
 		c.handleUpdateStats(msg)
 	case "leave_room":
 		c.handleLeaveRoom()
+	case "finish_game":
+		c.handleFinishGame(msg)
 	default:
 		c.sendError("unknown message type")
 	}
@@ -146,7 +152,14 @@ func (c *Client) handleJoinRoom(msg models.IncomingMessage) {
 		return
 	}
 
-	r := c.manager.GetRoom(msg.RoomCode)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	r, err := c.manager.GetRoom(ctx, msg.RoomCode)
+	if err != nil {
+		log.Printf("load room %s: %v", msg.RoomCode, err)
+		c.sendError("temporarily unavailable")
+		return
+	}
 	if r == nil {
 		c.sendError(room.ErrRoomClosed.Error())
 		return
@@ -171,6 +184,16 @@ func (c *Client) handleUpdateStats(msg models.IncomingMessage) {
 		return
 	}
 	if err := c.room.UpdateStats(c, *msg.Player); err != nil {
+		c.sendError(err.Error())
+	}
+}
+
+func (c *Client) handleFinishGame(msg models.IncomingMessage) {
+	if c.room == nil {
+		c.sendError(room.ErrNotInRoom.Error())
+		return
+	}
+	if err := c.room.Finish(c, msg.WinnerID); err != nil {
 		c.sendError(err.Error())
 	}
 }

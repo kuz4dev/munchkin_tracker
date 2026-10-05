@@ -53,12 +53,12 @@ func (s Stats) Validate() error {
 	return nil
 }
 
+// Player is a seat in a game. Its ID is stable for the whole game, across
+// reconnects; the connection that currently controls it is tracked separately.
 type Player struct {
-	ID string `json:"id"`
-	// SessionID is a secret reconnect token. It is never broadcast to other
-	// players — only sent to its owner in room_state.
-	SessionID string `json:"-"`
+	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Connected bool   `json:"connected"`
 	Stats
 }
 
@@ -95,7 +95,10 @@ type RoomInfo struct {
 }
 
 type ChangeLogEntry struct {
+	// Seq is the event's position within its game, starting at 1.
+	Seq        int64  `json:"seq"`
 	Timestamp  int64  `json:"timestamp"`
+	PlayerID   string `json:"playerId"`
 	PlayerName string `json:"playerName"`
 	EventType  string `json:"eventType"`
 	Field      string `json:"field,omitempty"`
@@ -113,6 +116,8 @@ type IncomingMessage struct {
 	// Player carries the new stats for update_stats. Only Stats fields are
 	// read; id/name/sessionId sent by the client are ignored.
 	Player *Stats `json:"player,omitempty"`
+	// WinnerID is the winning player for finish_game; empty for no winner.
+	WinnerID string `json:"winnerId,omitempty"`
 }
 
 type OutgoingMessage struct {
@@ -122,7 +127,12 @@ type OutgoingMessage struct {
 	Player   *Player   `json:"player,omitempty"`
 	PlayerID string    `json:"playerId,omitempty"`
 	// SessionID is only set in room_state sent to the session owner.
-	SessionID      string            `json:"sessionId,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	// Game lifecycle, in room_state and game_finished.
+	Status         string            `json:"status,omitempty"`
+	WinnerID       string            `json:"winnerId,omitempty"`
+	CreatedAt      int64             `json:"createdAt,omitempty"`
+	FinishedAt     int64             `json:"finishedAt,omitempty"`
 	Message        string            `json:"message,omitempty"`
 	ChangeLog      []*ChangeLogEntry `json:"changeLog,omitempty"`
 	ChangeLogEntry *ChangeLogEntry   `json:"changeLogEntry,omitempty"`
