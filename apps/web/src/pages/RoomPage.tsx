@@ -22,7 +22,7 @@ import { PlayerCard } from '@/components/PlayerCard'
 import { RoomHeader } from '@/components/RoomHeader'
 import { StatsEditor } from '@/components/StatsEditor'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { ConfirmDialog, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { gameActions, gameStore, useGame, useGameShallow } from '@/game/store'
 import { useWakeLock } from '@/hooks/useWakeLock'
 
@@ -52,6 +52,7 @@ export default function RoomPage() {
   useWakeLock(!!me && !isFinished)
 
   const [finishOpen, setFinishOpen] = useState(false)
+  const [leaveOpen, setLeaveOpen] = useState(false)
   const [suggestedWinner, setSuggestedWinner] = useState<string>()
 
   // Opened directly (reload, shared link): resume our seat or go home
@@ -93,6 +94,12 @@ export default function RoomPage() {
     navigate('/', { replace: true })
   }
 
+  // Leaving an active game gives up the seat (and the host role): ask first
+  function requestLeave() {
+    if (me && !isFinished) setLeaveOpen(true)
+    else leave()
+  }
+
   function openFinish() {
     setSuggestedWinner(undefined)
     setFinishOpen(true)
@@ -104,7 +111,7 @@ export default function RoomPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      {roomCode && <RoomHeader code={roomCode} connected={connected} onLeave={leave} />}
+      {roomCode && <RoomHeader code={roomCode} connected={connected} onLeave={requestLeave} />}
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3.5 px-4 pt-1.5 pb-[max(1.75rem,env(safe-area-inset-bottom))]">
         {resuming || !me ? (
@@ -126,8 +133,8 @@ export default function RoomPage() {
             <StatsEditor player={me} isHost={isHost} onChange={(stats) => gameActions().updateStats(stats)} />
 
             <div className={`grid gap-2.5 ${isHost ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              <Dialog>
-                <DialogTrigger asChild>
+              <Sheet>
+                <SheetTrigger asChild>
                   <Button
                     aria-label="Режим боя"
                     className="h-14 rounded-[18px] bg-mustard font-display text-[15px] font-semibold text-cocoa hover:bg-mustard/90"
@@ -135,17 +142,17 @@ export default function RoomPage() {
                     <Swords className="size-5" aria-hidden="true" />
                     Бой
                   </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 font-display text-xl">
-                      <Swords className="size-5 text-primary" aria-hidden="true" />
-                      Режим боя
-                    </DialogTitle>
-                  </DialogHeader>
-                  <CombatMode players={players} />
-                </DialogContent>
-              </Dialog>
+                </SheetTrigger>
+                <SheetContent
+                  title="Бой"
+                  icon={<Swords aria-hidden="true" />}
+                  description="Сравните силу вашей стороны с противником"
+                  hideDescription
+                  className="h-[92dvh]"
+                >
+                  <CombatMode players={players} defaultPlayerId={playerId} />
+                </SheetContent>
+              </Sheet>
 
               {isHost && (
                 <Button
@@ -199,6 +206,23 @@ export default function RoomPage() {
           </>
         )}
       </main>
+
+      <ConfirmDialog
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        title="Выйти из комнаты?"
+        description={
+          isHost && others.length > 0
+            ? 'Вы хост — роль перейдёт другому игроку. Ваш персонаж уйдёт из-за стола.'
+            : others.length === 0
+              ? 'Вы последний за столом. Если никто не зайдёт, комната закроется через 10\u00a0минут.'
+              : 'Ваш персонаж уйдёт из-за стола. Вернуться можно по коду комнаты, но уже с 1 уровня.'
+        }
+        art={<DoorArt className="mx-auto w-32" />}
+        confirmLabel="Выйти"
+        cancelLabel="Остаться"
+        onConfirm={leave}
+      />
     </div>
   )
 }

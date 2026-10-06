@@ -1,9 +1,9 @@
-import { byLevelThenName, type Player } from '@munchkin/core'
+import { byLevelThenName, MAX_LEVEL, power, type Player } from '@munchkin/core'
+import { cn } from 'cn'
+import { Crown, Flag } from 'lucide-react'
+import { RadioGroup } from 'radix-ui'
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CheckDot, Sheet, SheetContent } from '@/components/ui/sheet'
 
 const NO_WINNER = '__none__'
 
@@ -22,17 +22,17 @@ export function FinishGameDialog({ open, onOpenChange, players, playerId, sugges
   const title = !suggested ? 'Завершить игру' : suggested.id === playerId ? 'Победа?' : `Победа: ${suggested.name}?`
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">{title}</DialogTitle>
-          <DialogDescription>
-            Игра завершится для всех игроков. Менять характеристики после этого будет нельзя.
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        title={title}
+        eyebrow={suggested?.level === MAX_LEVEL ? `${MAX_LEVEL} уровень достигнут` : undefined}
+        icon={suggested ? <Crown aria-hidden="true" /> : <Flag aria-hidden="true" />}
+        description="Игра завершится для всех. Менять характеристики после этого будет нельзя."
+      >
         {/* Remounts on every open, so the selection starts from the suggestion */}
         <FinishForm
           players={players}
+          playerId={playerId}
           initialWinner={suggested?.id ?? NO_WINNER}
           onCancel={() => onOpenChange(false)}
           onFinish={(winner) => {
@@ -40,44 +40,86 @@ export function FinishGameDialog({ open, onOpenChange, players, playerId, sugges
             onOpenChange(false)
           }}
         />
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }
 
 interface FinishFormProps {
   players: Player[]
+  playerId: string
   initialWinner: string
   onCancel: () => void
   onFinish: (winner: string) => void
 }
 
-function FinishForm({ players, initialWinner, onCancel, onFinish }: FinishFormProps) {
+function FinishForm({ players, playerId, initialWinner, onCancel, onFinish }: FinishFormProps) {
   const [winner, setWinner] = useState(initialWinner)
   return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="finish-winner">Победитель</Label>
-        <Select value={winner} onValueChange={setWinner}>
-          <SelectTrigger id="finish-winner" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_WINNER}>Без победителя</SelectItem>
-            {byLevelThenName(players).map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name} <span className="ml-1 text-xs text-muted-foreground">(ур. {p.level})</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onCancel}>
-          Продолжить игру
-        </Button>
-        <Button onClick={() => onFinish(winner)}>Завершить</Button>
-      </div>
-    </div>
+    <>
+      <p id="finish-winner" className="mt-[18px] mb-2 text-sm font-bold">
+        Победитель
+      </p>
+      <RadioGroup.Root aria-labelledby="finish-winner" value={winner} onValueChange={setWinner} className="flex flex-col gap-2">
+        {byLevelThenName(players).map((p) => {
+          const checked = winner === p.id
+          return (
+            <RadioGroup.Item
+              key={p.id}
+              value={p.id}
+              className={cn(
+                'flex h-[68px] w-full items-center gap-3 rounded-[20px] border-2 px-3.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                checked ? 'border-primary bg-[#fff1e6]' : 'border-border bg-background',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex size-[42px] shrink-0 items-center justify-center rounded-[14px] font-display text-[17px] font-extrabold text-cocoa',
+                  checked ? 'bg-mustard' : 'bg-sand',
+                )}
+                aria-hidden="true"
+              >
+                {p.name.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base font-bold">
+                  {p.name}
+                  {p.id === playerId && ' (вы)'}
+                </span>
+                <span className="mt-0.5 block text-[13px] text-muted-foreground">
+                  Уровень {p.level} · сила {power(p)}
+                </span>
+              </span>
+              <CheckDot checked={checked} />
+            </RadioGroup.Item>
+          )
+        })}
+        <RadioGroup.Item
+          value={NO_WINNER}
+          className={cn(
+            'flex h-[52px] items-center justify-center gap-2 rounded-[18px] border-2 text-[15px] font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            winner === NO_WINNER ? 'border-solid border-primary bg-[#fff1e6] text-foreground' : 'border-dashed border-border text-muted-foreground',
+          )}
+        >
+          <Flag className="size-[18px]" aria-hidden="true" />
+          Без победителя
+        </RadioGroup.Item>
+      </RadioGroup.Root>
+
+      <button
+        type="button"
+        onClick={() => onFinish(winner)}
+        className="mt-5 h-14 w-full rounded-[18px] bg-primary font-display text-[15px] font-semibold text-primary-foreground transition-transform outline-none hover:bg-terracotta-deep focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"
+      >
+        Завершить игру
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="mt-2 h-[50px] w-full rounded-[18px] text-[15px] font-bold outline-none hover:bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        Продолжить игру
+      </button>
+    </>
   )
 }

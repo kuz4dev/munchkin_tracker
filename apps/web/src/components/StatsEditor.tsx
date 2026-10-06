@@ -14,9 +14,11 @@ import {
   type Player,
   type PlayerStats,
 } from '@munchkin/core'
+import { cn } from 'cn'
 import { Minus, Plus } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CheckDot, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { plural } from '@/lib/plural'
 
 interface StatsEditorProps {
@@ -91,9 +93,9 @@ export function StatsEditor({ player, isHost, onChange }: StatsEditorProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <TraitSelect label="Пол" value={player.gender} options={GENDERS} onChange={(gender) => onChange({ gender })} />
-        <TraitSelect label="Раса" value={player.race} options={RACES} onChange={(race) => onChange({ race })} />
-        <TraitSelect label="Класс" value={player.class} options={CLASSES} onChange={(cls) => onChange({ class: cls })} />
+        <TraitSelect label="Пол" hint="Пол вашего персонажа" value={player.gender} options={GENDERS} onChange={(gender) => onChange({ gender })} />
+        <TraitSelect label="Раса" hint="Карта расы, что сейчас перед вами" value={player.race} options={RACES} onChange={(race) => onChange({ race })} />
+        <TraitSelect label="Класс" hint="Нет карты класса — выберите «Без класса»" value={player.class} options={CLASSES} onChange={(cls) => onChange({ class: cls })} />
       </div>
     </div>
   )
@@ -143,27 +145,58 @@ function Stepper({ label, value, canDecrease, canIncrease, onStep }: StepperProp
 
 interface TraitSelectProps<T extends string> {
   label: string
+  hint: string
   value: T
-  options: Option<T>[]
+  options: readonly Option<T>[]
   onChange: (value: T) => void
 }
 
-function TraitSelect<T extends string>({ label, value, options, onChange }: TraitSelectProps<T>) {
+/** A pill showing the current trait; tapping it opens a sheet of large tiles. */
+function TraitSelect<T extends string>({ label, hint, value, options, onChange }: TraitSelectProps<T>) {
+  const [open, setOpen] = useState(false)
+  const current = getLabel(options, value)
+  // "Без класса" goes last, across the full row
+  const ordered = [...options.filter((o) => o.value !== 'none'), ...options.filter((o) => o.value === 'none')]
+
+  function choose(next: T) {
+    if (next !== value) onChange(next)
+    setOpen(false)
+  }
+
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as T)}>
-      <SelectTrigger
-        aria-label={label}
-        className="w-full min-w-0 justify-center rounded-full border-2 border-border bg-card px-2 text-[15px] font-bold data-[size=default]:h-11 [&_svg]:hidden"
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        aria-label={`${label}: ${current}`}
+        className="h-11 w-full min-w-0 truncate rounded-full border-2 border-border bg-card px-2 text-[15px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-95"
       >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        {current}
+      </SheetTrigger>
+      <SheetContent title={label} description={hint}>
+        <div role="radiogroup" aria-label={label} className="mt-5 grid grid-cols-2 gap-2.5">
+          {ordered.map((o) => {
+            const checked = o.value === value
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                onClick={() => choose(o.value)}
+                className={cn(
+                  'flex h-16 min-w-0 items-center justify-between gap-2 rounded-[20px] pr-4 pl-[18px] text-left text-[17px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97]',
+                  checked
+                    ? 'bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(180,70,31,0.3)]'
+                    : 'border-2 border-border bg-background',
+                  o.value === 'none' && 'col-span-2',
+                )}
+              >
+                <span className="truncate">{o.label}</span>
+                <CheckDot checked={checked} tone="mustard" />
+              </button>
+            )
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }

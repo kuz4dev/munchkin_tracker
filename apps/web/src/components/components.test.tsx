@@ -28,12 +28,25 @@ describe('StatsEditor', () => {
     expect(screen.getByText(/Ваш персонаж · хост/)).toBeInTheDocument()
   })
 
-  it('changes race through the select', async () => {
+  it('changes race through the sheet and closes it', async () => {
     const onChange = vi.fn()
     render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
-    await userEvent.click(screen.getByLabelText('Раса'))
-    await userEvent.click(await screen.findByRole('option', { name: 'Эльф' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Человек' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Раса' })
+    expect(within(sheet).getByRole('radio', { name: 'Человек' })).toBeChecked()
+    await userEvent.click(within(sheet).getByRole('radio', { name: 'Эльф' }))
     expect(onChange).toHaveBeenCalledWith({ race: 'elf' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps "no class" last and does not resend the current value', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Класс: Без класса' }))
+    const options = within(await screen.findByRole('dialog', { name: 'Класс' })).getAllByRole('radio')
+    expect(options.at(-1)).toHaveAccessibleName('Без класса')
+    await userEvent.click(options.at(-1)!)
+    expect(onChange).not.toHaveBeenCalled()
   })
 })
 
@@ -99,18 +112,28 @@ describe('CombatMode', () => {
     const players = [player('p1', 'Alice', { level: 5, gearBonus: 3 }), player('p2', 'Bob', { level: 2 })]
     render(<CombatMode players={players} />)
 
-    await userEvent.click(screen.getByLabelText('Игрок'))
-    await userEvent.click(await screen.findByRole('option', { name: /Alice/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Alice, сила 8' }))
     await userEvent.type(screen.getByLabelText('Сила противника'), '10')
     expect(screen.getByRole('status')).toHaveTextContent('Поражение')
 
-    await userEvent.click(screen.getByLabelText(/Союзник/))
-    await userEvent.click(await screen.findByRole('option', { name: /Bob/ }))
+    const allies = screen.getByRole('radiogroup', { name: /Союзник/ })
+    expect(within(allies).getByRole('radio', { name: 'Без союзника' })).toBeChecked()
+    await userEvent.click(within(allies).getByRole('radio', { name: 'Bob, сила 2' }))
     expect(screen.getByRole('status')).toHaveTextContent('Ничья') // 8 + 2 = 10
 
     await userEvent.click(screen.getByRole('button', { name: 'Alice + Bob: карта +1' }))
     expect(screen.getByRole('status')).toHaveTextContent('Победа')
     expect(screen.getByRole('status')).toHaveTextContent('+1')
+  })
+
+  it('starts with the current player and steps the monster power', async () => {
+    render(<CombatMode players={[player('p1', 'Alice', { level: 3 })]} defaultPlayerId="p1" />)
+    expect(screen.getByRole('radio', { name: 'Alice, сила 3' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Сила противника: меньше' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Сила противника: больше' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Сила противника: больше' }))
+    expect(screen.getByLabelText('Сила противника')).toHaveValue(2)
+    expect(screen.getByRole('status')).toHaveTextContent('Победа')
   })
 })
 
@@ -122,7 +145,9 @@ describe('FinishGameDialog', () => {
     render(<FinishGameDialog open onOpenChange={() => {}} players={players} playerId="p1" suggestedWinnerId="p2" onFinish={onFinish} />)
 
     expect(screen.getByRole('heading', { name: 'Победа: Bob?' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Завершить' }))
+    expect(screen.getByText('10 уровень достигнут')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Bob/ })).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Завершить игру' }))
     expect(onFinish).toHaveBeenCalledWith('p2')
   })
 
@@ -131,8 +156,17 @@ describe('FinishGameDialog', () => {
     render(<FinishGameDialog open onOpenChange={() => {}} players={players} playerId="p1" onFinish={onFinish} />)
 
     expect(screen.getByRole('heading', { name: 'Завершить игру' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Завершить' }))
+    expect(screen.getByRole('radio', { name: 'Без победителя' })).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Завершить игру' }))
     expect(onFinish).toHaveBeenCalledWith(undefined)
+  })
+
+  it('lets the host pick another winner', async () => {
+    const onFinish = vi.fn()
+    render(<FinishGameDialog open onOpenChange={() => {}} players={players} playerId="p1" suggestedWinnerId="p2" onFinish={onFinish} />)
+    await userEvent.click(screen.getByRole('radio', { name: /Alice \(вы\)/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Завершить игру' }))
+    expect(onFinish).toHaveBeenCalledWith('p1')
   })
 })
 

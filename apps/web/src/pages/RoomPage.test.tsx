@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gameStore } from '@/game/store'
@@ -78,6 +79,23 @@ describe('RoomPage in a game', () => {
       gameStore.setState((s) => ({ players: { ...s.players, p2: player('p2', 'Bob', { level: 10 }) } }))
     })
     expect(await screen.findByRole('heading', { name: 'Победа: Bob?' })).toBeInTheDocument()
+  })
+
+  it('asks before leaving an active game and warns the host', async () => {
+    const { player } = await import('@/test/fixtures')
+    const leaveRoom = vi.spyOn(gameStore.getState(), 'leaveRoom').mockImplementation(() => {})
+    await inRoom({ players: { p1: player('p1', 'Alice'), p2: player('p2', 'Bob') }, hostId: 'p1' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти из комнаты' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Выйти из комнаты?' })
+    expect(dialog).toHaveTextContent('роль перейдёт другому игроку')
+    await userEvent.click(screen.getByRole('button', { name: 'Остаться' }))
+    expect(leaveRoom).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти из комнаты' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+    expect(leaveRoom).toHaveBeenCalled()
+    expect(await screen.findByText('home')).toBeInTheDocument()
   })
 
   it('shows the results of a finished game', async () => {
