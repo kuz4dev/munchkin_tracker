@@ -40,3 +40,50 @@ describe('RoomPage', () => {
     expect(screen.queryByText(/^home/)).not.toBeInTheDocument()
   })
 })
+
+describe('RoomPage in a game', () => {
+  async function inRoom(state: Partial<ReturnType<typeof gameStore.getState>>) {
+    const { act } = await import('@testing-library/react')
+    gameStore.setState({
+      roomCode: 'ABC234',
+      playerId: 'p1',
+      connectionStatus: 'connected',
+      status: 'active',
+      changelog: [],
+      ...state,
+    })
+    renderRoom('ABC234')
+    return act
+  }
+
+  afterEach(() => {
+    gameStore.setState({ roomCode: '', playerId: '', players: {}, hostId: '', status: 'active', winnerId: '' })
+  })
+
+  it('lets only the host finish the game', async () => {
+    const { player } = await import('@/test/fixtures')
+    await inRoom({ players: { p1: player('p1', 'Alice'), p2: player('p2', 'Bob') }, hostId: 'p2' })
+    expect(screen.queryByRole('button', { name: 'Завершить игру' })).not.toBeInTheDocument()
+    expect(screen.getByText('Завершить игру может хост — Bob')).toBeInTheDocument()
+    expect(screen.getByText('Bob')).toBeInTheDocument()
+  })
+
+  it('offers the host to finish when someone reaches level 10', async () => {
+    const { player } = await import('@/test/fixtures')
+    const act = await inRoom({ players: { p1: player('p1', 'Alice'), p2: player('p2', 'Bob', { level: 9 }) }, hostId: 'p1' })
+    expect(screen.getByRole('button', { name: 'Завершить игру' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    act(() => {
+      gameStore.setState((s) => ({ players: { ...s.players, p2: player('p2', 'Bob', { level: 10 }) } }))
+    })
+    expect(await screen.findByRole('heading', { name: 'Победа: Bob? 🏆' })).toBeInTheDocument()
+  })
+
+  it('shows the results of a finished game', async () => {
+    const { player } = await import('@/test/fixtures')
+    await inRoom({ players: { p1: player('p1', 'Alice', { level: 10 }) }, hostId: 'p1', status: 'finished', winnerId: 'p1', createdAt: 1, finishedAt: 2 })
+    expect(screen.getByText('Игра окончена')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Режим боя' })).not.toBeInTheDocument()
+  })
+})
