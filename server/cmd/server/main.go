@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -73,22 +72,6 @@ func main() {
 			AllowCredentials: false,
 		}))
 		api.RegisterRoutes(r, manager, st)
-		// TEMPORARY: shows which proxy headers reach the server, to choose
-		// CLIENT_IP_HEADER. Echoes only the caller's own request. Remove after.
-		r.Get("/debug/client-ip", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "no-store")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"remoteAddr":     r.RemoteAddr,
-				"detected":       clientip.FromRequest(r),
-				"xForwardedFor":  r.Header.Values("X-Forwarded-For"),
-				"xRealIP":        r.Header.Get("X-Real-IP"),
-				"trueClientIP":   r.Header.Get("True-Client-IP"),
-				"cfConnectingIP": r.Header.Get("CF-Connecting-IP"),
-				"xEnvoyExternal": r.Header.Get("X-Envoy-External-Address"),
-				"forwarded":      r.Header.Get("Forwarded"),
-			})
-		})
 		r.Get("/ws", ws.HandleWebSocket(manager, hub, origins))
 	})
 
