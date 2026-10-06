@@ -21,16 +21,15 @@ export function InviteButton({ code }: { code: string }) {
   return (
     <div className="mt-3 flex flex-col items-center gap-2">
       <Button
-        variant="secondary"
-        className="h-11 px-4 font-mono text-base font-bold tracking-wider"
+        className="h-12 rounded-full bg-cocoa px-5 font-display text-base font-semibold tracking-[3px] text-primary-foreground hover:bg-cocoa/90"
         onClick={async () => setResult(await shareInvite(code))}
         aria-label={`Пригласить игроков в комнату ${code}`}
       >
         {code}
-        {result === 'copied' ? <Check className="text-game-green" aria-hidden="true" /> : <Share2 aria-hidden="true" />}
+        {result === 'copied' ? <Check className="text-mustard" aria-hidden="true" /> : <Share2 className="text-mustard" aria-hidden="true" />}
       </Button>
       {result && messages[result] && (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-[13px] font-semibold text-muted-foreground">
           {messages[result]}
         </p>
       )}

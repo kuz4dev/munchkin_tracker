@@ -1,6 +1,7 @@
-/** Formats a duration in ms as "1 ч 25 мин" / "12 мин". */
+/** Formats a duration in ms as "1 ч 25 мин" / "12 мин" / "меньше минуты". */
 export function formatDuration(ms: number): string {
   const totalMinutes = Math.max(0, Math.round(ms / 60000))
+  if (totalMinutes === 0) return 'меньше минуты'
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
   if (hours === 0) return `${minutes} мин`

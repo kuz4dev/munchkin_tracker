@@ -1,6 +1,6 @@
 import { Check, Copy, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { SwordMark } from '@/components/art'
 import { copyText, inviteLink } from '@/lib/share'
 
 interface RoomHeaderProps {
@@ -23,53 +23,42 @@ export function RoomHeader({ code, connected, onLeave }: RoomHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-border/60 bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
-      <div className="mx-auto max-w-4xl px-3 sm:px-4">
-        <div className="flex h-14 items-center justify-between sm:h-16">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <span className="shrink-0 text-lg select-none sm:text-xl" aria-hidden="true">
-              🗡️
-            </span>
-            <h1 className="hidden truncate text-base font-bold sm:block sm:text-lg">Манчкин</h1>
-            <button
-              type="button"
-              onClick={copyInvite}
-              aria-label={`Скопировать ссылку на комнату ${code}`}
-              className="flex items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5 transition-colors hover:bg-accent active:scale-95"
-            >
-              <span className="font-mono text-sm font-bold tracking-wider text-foreground sm:text-base">{code}</span>
-              {copied === 'ok' ? (
-                <Check className="size-4 shrink-0 text-game-green" aria-hidden="true" />
-              ) : (
-                <Copy className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              )}
-            </button>
-          </div>
+    <header className="sticky top-0 z-50 bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
+      <div className="mx-auto flex h-[70px] max-w-4xl items-center justify-between gap-3 px-4">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <SwordMark className="hidden size-8 shrink-0 sm:block" />
+          <button
+            type="button"
+            onClick={copyInvite}
+            aria-label={`Скопировать ссылку на комнату ${code}`}
+            className="flex h-[42px] items-center gap-2 rounded-full bg-cocoa px-3.5 font-display text-sm font-semibold tracking-[2px] text-primary-foreground transition-transform active:scale-95"
+          >
+            {code}
+            {copied === 'ok' ? (
+              <Check className="size-4 shrink-0 text-mustard" aria-hidden="true" />
+            ) : (
+              <Copy className="size-4 shrink-0 text-mustard" aria-hidden="true" />
+            )}
+          </button>
+        </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <div className={`flex items-center gap-1.5 ${connected ? 'text-game-green' : 'text-destructive'}`}>
-              <span
-                className={`size-2 shrink-0 rounded-full ${connected ? 'animate-pulse bg-game-green' : 'bg-destructive'}`}
-                aria-hidden="true"
-              />
-              <span className="sr-only text-xs font-medium sm:not-sr-only sm:text-sm">
-                {connected ? 'Онлайн' : 'Оффлайн'}
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              className="h-9 px-2.5 text-muted-foreground hover:text-destructive sm:px-3"
-              onClick={onLeave}
-            >
-              <LogOut className="size-4" aria-hidden="true" />
-              <span className="hidden text-sm sm:inline">Выйти</span>
-              <span className="sr-only sm:hidden">Выйти</span>
-            </Button>
-          </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span className={`flex items-center gap-1.5 text-[13px] font-bold ${connected ? 'text-online' : 'text-destructive'}`}>
+            <span className={`size-2 rounded-full ${connected ? 'bg-online' : 'bg-destructive'}`} aria-hidden="true" />
+            {connected ? 'Онлайн' : 'Оффлайн'}
+          </span>
+          <button
+            type="button"
+            onClick={onLeave}
+            aria-label="Выйти из комнаты"
+            className="flex size-11 items-center justify-center rounded-full border-2 border-border bg-card text-muted-foreground transition-colors hover:text-destructive"
+          >
+            <LogOut className="size-[18px]" aria-hidden="true" />
+          </button>
         </div>
       </div>
       {copied && (
-        <p role="status" className="pb-2 text-center text-xs text-muted-foreground">
+        <p role="status" className="pb-2 text-center text-[13px] font-semibold text-muted-foreground">
           {copied === 'ok' ? 'Ссылка на комнату скопирована' : `Не удалось скопировать. Код комнаты: ${code}`}
         </p>
       )}

@@ -74,8 +74,8 @@ export function describeGroup(group: ChangeLogGroup): string {
       return `${name} вышел`
     case 'finish':
       return group.lastNewValue
-        ? `🏆 Игра окончена, победитель: ${group.lastNewValue}`
-        : '🏁 Игра окончена без победителя'
+        ? `Игра окончена, победитель: ${group.lastNewValue}`
+        : 'Игра окончена без победителя'
     case 'stat_change': {
       const fieldLabel = FIELD_LABELS[group.field ?? ''] ?? group.field
       return `${name}: ${fieldLabel} ${formatFieldValue(group.field, group.firstOldValue)} → ${formatFieldValue(group.field, group.lastNewValue)}`

@@ -45,8 +45,8 @@ describe('changelog grouping', () => {
     expect(describeGroup(join!)).toBe('Bob присоединился')
     expect(describeGroup(leave!)).toBe('Bob вышел')
     expect(describeGroup(race!)).toBe('Igor: раса Человек → Эльф')
-    expect(describeGroup(win!)).toBe('🏆 Игра окончена, победитель: Bob')
-    expect(describeGroup(noWin!)).toBe('🏁 Игра окончена без победителя')
+    expect(describeGroup(win!)).toBe('Игра окончена, победитель: Bob')
+    expect(describeGroup(noWin!)).toBe('Игра окончена без победителя')
   })
 })
 
@@ -99,8 +99,8 @@ describe('game helpers', () => {
 
   it('formats durations and times', () => {
     expect([formatDuration(0), formatDuration(12 * 60_000), formatDuration(60 * 60_000), formatDuration(85 * 60_000)])
-      .toEqual(['0 мин', '12 мин', '1 ч', '1 ч 25 мин'])
-    expect(formatDuration(-5000)).toBe('0 мин')
+      .toEqual(['меньше минуты', '12 мин', '1 ч', '1 ч 25 мин'])
+    expect(formatDuration(-5000)).toBe('меньше минуты')
     expect(formatTime(new Date(2026, 0, 1, 9, 5).getTime())).toBe('09:05')
   })
 })

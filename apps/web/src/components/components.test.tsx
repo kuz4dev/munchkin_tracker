@@ -41,12 +41,12 @@ describe('PlayerCard', () => {
   it('shows stats, traits, host and offline marks', () => {
     const { rerender } = render(<PlayerCard player={player('p2', 'Bob', { level: 5, gearBonus: 3, race: 'elf' })} />)
     expect(screen.getByText('8')).toBeInTheDocument()
-    expect(screen.getByText('Эльф')).toBeInTheDocument()
-    expect(screen.queryByText('не в сети')).not.toBeInTheDocument()
+    expect(screen.getByText(/Эльф · Без класса · ур\. 5 · бонусы 3/)).toBeInTheDocument()
+    expect(screen.queryByText(/не в сети/)).not.toBeInTheDocument()
     expect(screen.queryByText(/хост/)).not.toBeInTheDocument()
 
     rerender(<PlayerCard player={player('p2', 'Bob', { connected: false })} isHost />)
-    expect(screen.getByText('не в сети')).toBeInTheDocument()
+    expect(screen.getByText(/не в сети/)).toBeInTheDocument()
     expect(screen.getByText(/хост/)).toBeInTheDocument()
   })
 })
@@ -79,7 +79,7 @@ describe('ChangeLog', () => {
       />,
     )
     expect(screen.getByText('Bob присоединился')).toBeInTheDocument()
-    expect(screen.getByText('🏆 Игра окончена, победитель: Bob')).toBeInTheDocument()
+    expect(screen.getByText('Игра окончена, победитель: Bob')).toBeInTheDocument()
   })
 
   it('loads earlier history and offers a retry on failure', async () => {
@@ -121,7 +121,7 @@ describe('FinishGameDialog', () => {
     const onFinish = vi.fn()
     render(<FinishGameDialog open onOpenChange={() => {}} players={players} playerId="p1" suggestedWinnerId="p2" onFinish={onFinish} />)
 
-    expect(screen.getByRole('heading', { name: 'Победа: Bob? 🏆' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Победа: Bob?' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Завершить' }))
     expect(onFinish).toHaveBeenCalledWith('p2')
   })

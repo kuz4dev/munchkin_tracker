@@ -9,15 +9,15 @@ export function InstallHint() {
 
   if (canInstall) {
     return (
-      <Button variant="ghost" className="mt-4 text-muted-foreground" onClick={() => void promptInstall()}>
+      <Button variant="ghost" className="h-11 px-0 text-[15px] font-bold text-primary hover:bg-transparent hover:text-terracotta-deep" onClick={() => void promptInstall()}>
         <Download aria-hidden="true" />
-        Установить приложение
+        Установить на телефон
       </Button>
     )
   }
   if (isIosSafari()) {
     return (
-      <p className="mt-4 flex max-w-xs items-center justify-center gap-1 text-center text-xs text-muted-foreground">
+      <p className="flex items-center gap-1 text-sm text-muted-foreground">
         Чтобы установить: <Share className="size-3.5" aria-label="Поделиться" /> → «На экран „Домой“»
       </p>
     )

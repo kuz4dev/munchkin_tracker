@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-const THEME_COLOR = '#f5efe6'
+const THEME_COLOR = '#fbf1e4'
 
 /**
  * Adds a Content-Security-Policy to the built index.html. Only our own
@@ -77,6 +77,14 @@ export default defineConfig(({ mode }) => ({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
         cleanupOutdatedCaches: true,
+        // Fonts come in many subsets; cache only the ones the browser actually loads
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === 'font',
+            handler: 'CacheFirst',
+            options: { cacheName: 'fonts', expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+        ],
       },
     }),
   ],

@@ -13,6 +13,7 @@ import { Flag, Swords } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ChangeLog } from '@/components/ChangeLog'
+import { DoorArt } from '@/components/art'
 import { CombatMode } from '@/components/CombatMode'
 import { FinishGameDialog } from '@/components/FinishGameDialog'
 import { GameSummary } from '@/components/GameSummary'
@@ -105,7 +106,7 @@ export default function RoomPage() {
     <div className="flex min-h-dvh flex-col bg-background">
       {roomCode && <RoomHeader code={roomCode} connected={connected} onLeave={leave} />}
 
-      <main className="mx-auto w-full max-w-4xl flex-1 space-y-5 px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:space-y-6 sm:px-4 sm:py-6">
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3.5 px-4 pt-1.5 pb-[max(1.75rem,env(safe-area-inset-bottom))]">
         {resuming || !me ? (
           <Waiting text={resuming ? 'Переподключение...' : 'Подключение...'} />
         ) : isFinished ? (
@@ -123,54 +124,63 @@ export default function RoomPage() {
         ) : (
           <>
             <StatsEditor player={me} isHost={isHost} onChange={(stats) => gameActions().updateStats(stats)} />
-            {journal}
 
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="h-10 w-full">
-                  <Swords aria-hidden="true" />
-                  Режим боя
+            <div className={`grid gap-2.5 ${isHost ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    aria-label="Режим боя"
+                    className="h-14 rounded-[18px] bg-mustard font-display text-[15px] font-semibold text-cocoa hover:bg-mustard/90"
+                  >
+                    <Swords className="size-5" aria-hidden="true" />
+                    Бой
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 font-display text-xl">
+                      <Swords className="size-5 text-primary" aria-hidden="true" />
+                      Режим боя
+                    </DialogTitle>
+                  </DialogHeader>
+                  <CombatMode players={players} />
+                </DialogContent>
+              </Dialog>
+
+              {isHost && (
+                <Button
+                  aria-label="Завершить игру"
+                  variant="outline"
+                  className="h-14 rounded-[18px] border-2 bg-card text-[15px] font-bold"
+                  disabled={!connected}
+                  onClick={openFinish}
+                >
+                  <Flag className="size-[18px]" aria-hidden="true" />
+                  Завершить
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>⚔️ Режим боя</DialogTitle>
-                </DialogHeader>
-                <CombatMode players={players} />
-              </DialogContent>
-            </Dialog>
-
-            {isHost ? (
-              <Button variant="ghost" className="h-10 w-full text-muted-foreground" disabled={!connected} onClick={openFinish}>
-                <Flag aria-hidden="true" />
-                Завершить игру
-              </Button>
-            ) : (
-              host && (
-                <p className="text-center text-xs text-muted-foreground">Завершить игру может хост — {host.name}</p>
-              )
+              )}
+            </div>
+            {!isHost && host && (
+              <p className="text-center text-[13px] text-muted-foreground">Завершить игру может хост — {host.name}</p>
             )}
 
+            {journal}
+
             {others.length > 0 ? (
-              <section>
-                <div className="mb-3 flex items-center gap-2 sm:mb-4">
-                  <h2 className="text-base font-bold text-foreground sm:text-lg">Другие игроки</h2>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{others.length}</span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-                  {others.map((p) => (
-                    <PlayerCard key={p.id} player={p} isHost={p.id === host?.id} />
-                  ))}
-                </div>
+              <section className="flex flex-col gap-3">
+                <h2 className="mt-2.5 font-display text-lg font-extrabold">За столом</h2>
+                {others.map((p) => (
+                  <PlayerCard key={p.id} player={p} isHost={p.id === host?.id} />
+                ))}
               </section>
             ) : (
               connected && (
-                <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-                  <div className="mb-4 animate-bounce text-4xl select-none" aria-hidden="true">
-                    ⏳
-                  </div>
-                  <p className="text-base font-medium text-muted-foreground">Ожидание других игроков...</p>
-                  <p className="mt-1 text-sm text-muted-foreground/70">Поделитесь кодом или ссылкой на комнату</p>
+                <div className="flex flex-col items-center py-6 text-center">
+                  <DoorArt className="w-48" />
+                  <p className="mt-4 font-display text-lg font-extrabold">Ждём игроков</p>
+                  <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                    Отправьте друзьям ссылку или продиктуйте код комнаты
+                  </p>
                   <InviteButton code={roomCode} />
                 </div>
               )
@@ -195,9 +205,9 @@ export default function RoomPage() {
 
 function Waiting({ text }: { text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
-      <div className="mb-4 size-8 animate-spin rounded-full border-3 border-primary border-t-transparent" aria-hidden="true" />
-      <p className="text-base font-medium text-muted-foreground">{text}</p>
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-4 size-9 animate-spin rounded-full border-4 border-mustard border-t-transparent" aria-hidden="true" />
+      <p className="text-base font-semibold text-muted-foreground">{text}</p>
     </div>
   )
 }

@@ -77,7 +77,7 @@ describe('RoomPage in a game', () => {
     act(() => {
       gameStore.setState((s) => ({ players: { ...s.players, p2: player('p2', 'Bob', { level: 10 }) } }))
     })
-    expect(await screen.findByRole('heading', { name: 'Победа: Bob? 🏆' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Победа: Bob?' })).toBeInTheDocument()
   })
 
   it('shows the results of a finished game', async () => {

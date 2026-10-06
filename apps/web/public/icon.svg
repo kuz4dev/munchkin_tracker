@@ -1,11 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#a8372a"/>
+  <clipPath id="bg"><rect width="512" height="512" rx="112"/></clipPath>
+  <rect width="512" height="512" rx="112" fill="#b4461f"/>
+  <circle cx="400" cy="112" r="130" fill="#c95a30" clip-path="url(#bg)"/>
   <!-- A sword, kept inside the central safe zone used by maskable icons -->
-  <g transform="rotate(-45 256 256)" fill="#faf8f5">
-    <path d="M256 92 L278 132 L278 300 L234 300 L234 132 Z"/>
-    <rect x="184" y="300" width="144" height="26" rx="13"/>
-    <rect x="243" y="326" width="26" height="70" rx="8"/>
-    <circle cx="256" cy="410" r="22"/>
+  <g transform="rotate(-45 256 256)">
+    <path d="M256 92 L280 134 L280 300 L232 300 L232 134 Z" fill="#fffaf3"/>
+    <path d="M256 92 L280 134 L280 300 L256 300 Z" fill="#f3d9b8"/>
+    <rect x="180" y="300" width="152" height="28" rx="14" fill="#3a2420"/>
+    <rect x="242" y="328" width="28" height="70" rx="9" fill="#3a2420"/>
+    <circle cx="256" cy="414" r="24" fill="#e8a33d"/>
   </g>
-  <path d="M256 92 L278 132 L278 300 L256 300 Z" transform="rotate(-45 256 256)" fill="#ecdcc1"/>
 </svg>

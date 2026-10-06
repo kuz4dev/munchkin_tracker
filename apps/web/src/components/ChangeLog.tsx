@@ -1,8 +1,8 @@
 import { describeEntry, describeGroup, formatTime, groupChangelog, type ChangeLogEntry } from '@munchkin/core'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ScrollText } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { plural } from '@/lib/plural'
 
 interface ChangeLogProps {
   entries: ChangeLogEntry[]
@@ -57,26 +57,24 @@ export function ChangeLog({ entries, hasOlder, loadingOlder, onLoadOlder }: Chan
   }
 
   return (
-    <Card className="gap-0 overflow-hidden py-0">
+    <div className="overflow-hidden rounded-[18px] bg-secondary">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 hover:bg-muted/50">
-          <span className="flex items-center gap-2">
-            <span className="text-base font-bold">Журнал</span>
-            {entries.length > 0 && (
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{entries.length}</span>
-            )}
+        <CollapsibleTrigger className="flex h-[54px] w-full items-center justify-between gap-3 px-[18px] text-[15px] font-bold">
+          <span className="flex items-center gap-2.5">
+            <ScrollText className="size-[18px] text-primary" aria-hidden="true" />
+            Журнал партии
           </span>
-          <ChevronDown
-            className={`size-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
+          <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+            {entries.length > 0 && `${entries.length} ${plural(entries.length, ['событие', 'события', 'событий'])}`}
+            <ChevronDown className={`size-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </span>
         </CollapsibleTrigger>
 
         <CollapsibleContent>
           {groups.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">Пока нет событий</p>
           ) : (
-            <div ref={scrollRef} className="max-h-60 space-y-0.5 overflow-y-auto px-4 pb-3">
+            <div ref={scrollRef} className="max-h-72 space-y-0.5 overflow-y-auto border-t-2 border-background/60 px-[18px] py-2">
               {hasOlder && (
                 <div className="py-1 text-center">
                   <button
@@ -133,6 +131,6 @@ export function ChangeLog({ entries, hasOlder, loadingOlder, onLoadOlder }: Chan
           )}
         </CollapsibleContent>
       </Collapsible>
-    </Card>
+    </div>
   )
 }

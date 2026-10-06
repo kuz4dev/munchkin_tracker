@@ -19,13 +19,13 @@ interface FinishGameDialogProps {
 
 export function FinishGameDialog({ open, onOpenChange, players, playerId, suggestedWinnerId, onFinish }: FinishGameDialogProps) {
   const suggested = players.find((p) => p.id === suggestedWinnerId)
-  const title = !suggested ? 'Завершить игру' : suggested.id === playerId ? 'Победа? 🏆' : `Победа: ${suggested.name}? 🏆`
+  const title = !suggested ? 'Завершить игру' : suggested.id === playerId ? 'Победа?' : `Победа: ${suggested.name}?`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="font-display text-xl">{title}</DialogTitle>
           <DialogDescription>
             Игра завершится для всех игроков. Менять характеристики после этого будет нельзя.
           </DialogDescription>

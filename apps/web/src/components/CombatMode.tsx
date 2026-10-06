@@ -1,4 +1,5 @@
 import { formatBonus, power, resolveCombat, type Player } from '@munchkin/core'
+import { Handshake, Skull, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -104,17 +105,16 @@ export function CombatMode({ players }: { players: Player[] }) {
 
           <div
             role="status"
-            className={`rounded-xl border px-4 py-3 text-center ${
-              outcome.result === 'win'
-                ? 'border-green-500/30 bg-green-500/15'
-                : outcome.result === 'lose'
-                  ? 'border-red-500/30 bg-red-500/15'
-                  : 'border-yellow-500/30 bg-yellow-500/15'
+            className={`animate-in rounded-2xl px-4 py-3 text-center duration-300 fade-in zoom-in-95 ${
+              outcome.result === 'win' ? 'bg-win/12' : outcome.result === 'lose' ? 'bg-lose/10' : 'bg-mustard/25'
             }`}
           >
             {outcome.result === 'win' && (
               <>
-                <p className="text-lg font-extrabold text-green-600">Победа! 🎉</p>
+                <p className="flex items-center justify-center gap-2 font-display text-lg font-extrabold text-win">
+                  <Trophy className="size-5" aria-hidden="true" />
+                  Победа!
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   Перевес: <span className="font-bold text-foreground">+{outcome.margin}</span>
                 </p>
@@ -122,7 +122,10 @@ export function CombatMode({ players }: { players: Player[] }) {
             )}
             {outcome.result === 'lose' && (
               <>
-                <p className="text-lg font-extrabold text-red-600">Поражение 💀</p>
+                <p className="flex items-center justify-center gap-2 font-display text-lg font-extrabold text-lose">
+                  <Skull className="size-5" aria-hidden="true" />
+                  Поражение
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   Перевес противника: <span className="font-bold text-foreground">+{outcome.margin}</span>
                 </p>
@@ -130,7 +133,10 @@ export function CombatMode({ players }: { players: Player[] }) {
             )}
             {outcome.result === 'draw' && (
               <>
-                <p className="text-lg font-extrabold text-yellow-600">Ничья 🤝</p>
+                <p className="flex items-center justify-center gap-2 font-display text-lg font-extrabold text-foreground">
+                  <Handshake className="size-5" aria-hidden="true" />
+                  Ничья
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">По правилам Манчкина — победитель монстр</p>
               </>
             )}
@@ -142,9 +148,9 @@ export function CombatMode({ players }: { players: Player[] }) {
 }
 
 function BonusRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const color = value > 0 ? 'text-green-600' : value < 0 ? 'text-red-600' : 'text-muted-foreground'
+  const color = value > 0 ? 'text-win' : value < 0 ? 'text-lose' : 'text-muted-foreground'
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-secondary/20 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-secondary/60 px-3 py-2">
       <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{label}</span>
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="icon-sm" aria-label={`${label}: карта −1`} onClick={() => onChange(value - 1)}>
@@ -161,9 +167,9 @@ function BonusRow({ label, value, onChange }: { label: string; value: number; on
 
 function PowerBox({ label, total, base, cards }: { label: string; total: number; base: number; cards: number }) {
   return (
-    <div className="flex-1 rounded-lg bg-secondary/30 px-3 py-2 text-center">
-      <p className="truncate text-[10px] font-medium tracking-wider text-muted-foreground uppercase">{label}</p>
-      <p className="mt-0.5 text-2xl font-extrabold tabular-nums">{total}</p>
+    <div className="flex-1 rounded-2xl bg-secondary/60 px-3 py-2 text-center">
+      <p className="truncate text-[10px] font-bold tracking-wider text-muted-foreground uppercase">{label}</p>
+      <p className="mt-0.5 font-display text-2xl font-extrabold tabular-nums">{total}</p>
       {cards !== 0 && (
         <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
           {base} {cards > 0 ? '+' : '−'} {Math.abs(cards)}

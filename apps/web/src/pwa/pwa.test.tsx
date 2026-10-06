@@ -72,7 +72,7 @@ describe('install', () => {
   it('shows the install button once the browser allows it', async () => {
     const { InstallHint } = await import('./InstallHint')
     render(<InstallHint />)
-    expect(screen.queryByRole('button', { name: 'Установить приложение' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Установить на телефон' })).not.toBeInTheDocument()
 
     const prompt = vi.fn(async () => {})
     const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
@@ -84,9 +84,9 @@ describe('install', () => {
     })
     expect(event.defaultPrevented).toBe(true) // our button instead of the mini-infobar
 
-    await userEvent.click(screen.getByRole('button', { name: 'Установить приложение' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Установить на телефон' }))
     expect(prompt).toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Установить приложение' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Установить на телефон' })).not.toBeInTheDocument()
   })
 })
 
