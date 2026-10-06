@@ -5,10 +5,16 @@ services:
     dockerfilePath: ./server/Dockerfile
     dockerContext: ./server
     plan: free
+    # Next to the Neon database (AWS eu-central-1)
+    region: frankfurt
+    # Deploys come from GitHub Actions after the tests pass (RENDER_DEPLOY_HOOK_URL)
+    autoDeploy: false
     healthCheckPath: /healthz
     envVars:
+      # The Cloudflare Pages address, e.g. https://munchkin-tracker.pages.dev.
+      # Set in the Render dashboard once the frontend is created.
       - key: ALLOWED_ORIGINS
-        value: https://munchkin.pages.dev
+        sync: false
       # Postgres connection string (e.g. from Neon). Set in the Render dashboard.
       # Without it the server keeps games in memory only.
       - key: DATABASE_URL
