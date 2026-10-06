@@ -124,6 +124,15 @@
   }
 }
 
+/* Installed app: no rubber-band stretch when the page is pulled past its edges.
+   In a browser tab the same pull is pull-to-refresh, so it stays there. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* Home hero (HeroArt): an entrance once, then a slow idle loop.
    Only transform and opacity move, so the compositor does the work. */
 @layer components {
