@@ -15,6 +15,11 @@ services:
       # Set in the Render dashboard once the frontend is created.
       - key: ALLOWED_ORIGINS
         sync: false
+      # Render sits behind Cloudflare, which sets CF-Connecting-IP to the real
+      # client address and rejects requests that try to supply it (checked
+      # 2026-10-06). X-Forwarded-For keeps client-supplied entries: don't use it.
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
       # Postgres connection string (e.g. from Neon). Set in the Render dashboard.
       # Without it the server keeps games in memory only.
       - key: DATABASE_URL
