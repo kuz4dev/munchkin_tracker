@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,6 +16,8 @@ type Memory struct {
 	games  map[string]*Game
 	seats  map[string]*memSeat
 	events map[string][]Event // game ID -> events in seq order
+	// metrics: "YYYY-MM-DD/event" -> count
+	metrics map[string]int64
 }
 
 type memSeat struct {
@@ -24,9 +27,10 @@ type memSeat struct {
 
 func NewMemory() *Memory {
 	return &Memory{
-		games:  make(map[string]*Game),
-		seats:  make(map[string]*memSeat),
-		events: make(map[string][]Event),
+		games:   make(map[string]*Game),
+		seats:   make(map[string]*memSeat),
+		metrics: make(map[string]int64),
+		events:  make(map[string][]Event),
 	}
 }
 
@@ -96,6 +100,8 @@ func (m *Memory) applyLocked(op Op) error {
 		}
 	case CloseGame:
 		m.deleteGameLocked(op.GameID)
+	case CountMetric:
+		m.metrics[op.Day.UTC().Format(time.DateOnly)+"/"+op.Event] += op.Count
 	default:
 		return fmt.Errorf("unknown op %T", op)
 	}
@@ -173,6 +179,32 @@ func (m *Memory) AbandonStale(_ context.Context, activeSince time.Time) (int64, 
 		}
 	}
 	return n, nil
+}
+
+func (m *Memory) Metrics(_ context.Context, since time.Time) ([]MetricCount, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	from := since.UTC().Format(time.DateOnly)
+	var out []MetricCount
+	for key, n := range m.metrics {
+		day, event, _ := strings.Cut(key, "/")
+		if day < from {
+			continue
+		}
+		d, err := time.Parse(time.DateOnly, day)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, MetricCount{Day: d, Event: event, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Day.Equal(out[j].Day) {
+			return out[i].Day.Before(out[j].Day)
+		}
+		return out[i].Event < out[j].Event
+	})
+	return out, nil
 }
 
 func (m *Memory) Ping(context.Context) error { return nil }

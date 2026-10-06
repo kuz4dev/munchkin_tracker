@@ -193,6 +193,38 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 		}
 	})
 
+	t.Run("metrics add up per day and event", func(t *testing.T) {
+		st := newStore(t)
+		day := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+		next := day.AddDate(0, 0, 1)
+		mustApply(t, st,
+			CountMetric{Day: day, Event: "visit", Count: 3},
+			CountMetric{Day: day.Add(23 * time.Hour), Event: "visit", Count: 2},
+			CountMetric{Day: day, Event: "invite", Count: 1},
+			CountMetric{Day: next, Event: "visit", Count: 4},
+		)
+		got, err := st.Metrics(ctx, day)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []MetricCount{
+			{Day: day, Event: "invite", Count: 1},
+			{Day: day, Event: "visit", Count: 5},
+			{Day: next, Event: "visit", Count: 4},
+		}
+		if len(got) != len(want) {
+			t.Fatalf("metrics = %+v, want %+v", got, want)
+		}
+		for i := range want {
+			if !got[i].Day.Equal(want[i].Day) || got[i].Event != want[i].Event || got[i].Count != want[i].Count {
+				t.Fatalf("metrics[%d] = %+v, want %+v", i, got[i], want[i])
+			}
+		}
+		if later, err := st.Metrics(ctx, next); err != nil || len(later) != 1 {
+			t.Fatalf("metrics since next day = %+v, %v", later, err)
+		}
+	})
+
 	t.Run("ping", func(t *testing.T) {
 		if err := newStore(t).Ping(ctx); err != nil {
 			t.Error(err)

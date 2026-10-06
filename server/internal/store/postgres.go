@@ -114,6 +114,10 @@ func queueOp(b *pgx.Batch, op Op) error {
 		queueTouch(b, op.GameID, op.At)
 	case CloseGame:
 		b.Queue(`UPDATE games SET status = 'abandoned' WHERE id = $1 AND status = 'active'`, op.GameID)
+	case CountMetric:
+		b.Queue(`INSERT INTO app_metrics (day, event, count) VALUES ($1::date, $2, $3)
+			ON CONFLICT (day, event) DO UPDATE SET count = app_metrics.count + EXCLUDED.count`,
+			op.Day.UTC().Format(time.DateOnly), op.Event, op.Count)
 	default:
 		return fmt.Errorf("unknown op %T", op)
 	}
@@ -197,6 +201,24 @@ func (p *Postgres) AbandonStale(ctx context.Context, activeSince time.Time) (int
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
+}
+
+func (p *Postgres) Metrics(ctx context.Context, since time.Time) ([]MetricCount, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT day::text, event, count FROM app_metrics WHERE day >= $1::date ORDER BY day, event`,
+		since.UTC().Format(time.DateOnly))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (MetricCount, error) {
+		var m MetricCount
+		var day string
+		if err := row.Scan(&day, &m.Event, &m.Count); err != nil {
+			return m, err
+		}
+		m.Day, err = time.Parse(time.DateOnly, day)
+		return m, err
+	})
 }
 
 func (p *Postgres) Ping(ctx context.Context) error {

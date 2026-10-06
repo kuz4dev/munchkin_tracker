@@ -23,7 +23,7 @@ func TestPostgresStore(t *testing.T) {
 	t.Cleanup(pg.Close)
 
 	testStore(t, func(t *testing.T) Store {
-		if _, err := pg.pool.Exec(ctx, `TRUNCATE games, game_seats, game_events`); err != nil {
+		if _, err := pg.pool.Exec(ctx, `TRUNCATE games, game_seats, game_events, app_metrics`); err != nil {
 			t.Fatal(err)
 		}
 		return pg

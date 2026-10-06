@@ -124,6 +124,20 @@ type CloseGame struct {
 	At     time.Time
 }
 
+// CountMetric adds Count to an anonymous app counter for a day (UTC).
+type CountMetric struct {
+	Day   time.Time
+	Event string
+	Count int64
+}
+
+// MetricCount is one stored app counter.
+type MetricCount struct {
+	Day   time.Time // UTC midnight
+	Event string
+	Count int64
+}
+
 func (CreateGame) isOp()      {}
 func (AddSeat) isOp()         {}
 func (UpdateSeatStats) isOp() {}
@@ -133,6 +147,7 @@ func (SetHost) isOp()         {}
 func (FinishGame) isOp()      {}
 func (TouchGame) isOp()       {}
 func (CloseGame) isOp()       {}
+func (CountMetric) isOp()     {}
 
 type Store interface {
 	// Apply performs ops atomically and in order.
@@ -145,6 +160,8 @@ type Store interface {
 	ListEvents(ctx context.Context, gameID string, beforeSeq int64, limit int) ([]Event, error)
 	// AbandonStale marks active games inactive since before activeSince as abandoned.
 	AbandonStale(ctx context.Context, activeSince time.Time) (int64, error)
+	// Metrics returns app counters from the given day on, by day then event.
+	Metrics(ctx context.Context, since time.Time) ([]MetricCount, error)
 	Ping(ctx context.Context) error
 	Close()
 }

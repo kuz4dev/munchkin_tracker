@@ -44,6 +44,8 @@ func main() {
 
 	janitorStop := make(chan struct{})
 	go manager.RunJanitor(time.Minute, janitorStop)
+	metrics := api.NewMetrics()
+	go metrics.Run(time.Minute, janitorStop, writer.Enqueue)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -71,7 +73,7 @@ func main() {
 			// No cookies or auth headers are used, so none are allowed.
 			AllowCredentials: false,
 		}))
-		api.RegisterRoutes(r, manager, st)
+		api.RegisterRoutes(r, manager, st, metrics)
 		r.Get("/ws", ws.HandleWebSocket(manager, hub, origins))
 	})
 
@@ -105,6 +107,7 @@ func main() {
 	}
 	// WebSockets are hijacked connections, so Shutdown doesn't close them.
 	log.Printf("closed %d websocket(s)", hub.CloseAll())
+	metrics.Flush(writer.Enqueue)
 	if err := writer.Close(shutdownCtx); err != nil {
 		log.Printf("store writer did not drain: %v", err)
 	}

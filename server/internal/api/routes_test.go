@@ -43,7 +43,7 @@ func setup(t *testing.T, changes int) (http.Handler, string) {
 		t.Fatal(err)
 	}
 	r := chi.NewRouter()
-	RegisterRoutes(r, m, st)
+	RegisterRoutes(r, m, st, NewMetrics())
 	return r, rm.Code
 }
 

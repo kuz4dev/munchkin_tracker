@@ -49,3 +49,12 @@ npm test                                   # core and web
 npm run typecheck && npm run lint && npm run build
 cd server && go test ./...                 # server (set TEST_DATABASE_URL for Postgres tests)
 ```
+
+## Analytics
+
+No cookies and no personal data, so no consent banner is needed.
+
+- **Traffic** (visitors, countries, devices, referrers): Cloudflare Web Analytics, enabled in the Pages project (Metrics → Web Analytics). Cloudflare injects its script; the CSP allows it.
+- **Game funnel**: run `SELECT * FROM daily_stats LIMIT 30;` in the Neon SQL editor. One row per day (UTC): visits and launches of the installed app, rooms created, rooms where friends joined, finished games, players, median game length, invites shared, install clicks and confirmed installs.
+
+The app sends the counters with `track()` (`apps/web/src/lib/metrics.ts`) to `POST /api/metrics`. The server accepts only known event names, counts them in memory and writes per-day totals to `app_metrics` once a minute.

@@ -33,12 +33,14 @@ type EventLister interface {
 	ListEvents(ctx context.Context, gameID string, beforeSeq int64, limit int) ([]store.Event, error)
 }
 
-func RegisterRoutes(r chi.Router, manager *room.Manager, events EventLister) {
+func RegisterRoutes(r chi.Router, manager *room.Manager, events EventLister, metrics *Metrics) {
 	createLimiter := newRateLimiter(createRoomLimit, createRoomWindow)
 	readLimiter := newRateLimiter(readLimit, readWindow)
+	metricsLimiter := newRateLimiter(metricsLimit, metricsWindow)
 	r.With(createLimiter.Middleware).Post("/api/rooms", createRoom(manager))
 	r.With(readLimiter.Middleware).Get("/api/rooms/{code}", getRoomInfo(manager))
 	r.With(readLimiter.Middleware).Get("/api/rooms/{code}/events", listEvents(manager, events))
+	r.With(metricsLimiter.Middleware).Post("/api/metrics", trackMetric(metrics))
 }
 
 // Pinger checks that a dependency is reachable.
