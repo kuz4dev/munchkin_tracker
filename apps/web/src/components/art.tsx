@@ -1,33 +1,119 @@
 // Decorative SVG illustrations in the brand palette. All are aria-hidden:
 // they never carry information the text around them doesn't.
 
+import { useCallback, useEffect, useRef, useState } from 'react'
+
 type ArtProps = { className?: string }
 
-/** Home page: a die, an arched door and coins on a table line. */
+type Pip = readonly [number, number]
+const C: Pip = [92, 198]
+const TL: Pip = [70, 176]
+const TR: Pip = [114, 176]
+const ML: Pip = [70, 198]
+const MR: Pip = [114, 198]
+const BL: Pip = [70, 220]
+const BR: Pip = [114, 220]
+const DIE_FACES: readonly (readonly Pip[])[] = [
+  [C],
+  [TL, BR],
+  [TL, C, BR],
+  [TL, TR, BL, BR],
+  [TL, TR, C, BL, BR],
+  [TL, TR, ML, MR, BL, BR],
+]
+const ROLL_MS = 700
+
+/** Four-point sparkle centred on (x, y). */
+function sparkle(x: number, y: number, r: number) {
+  const k = r * 0.28
+  return `M${x} ${y - r}Q${x + k} ${y - k} ${x + r} ${y}Q${x + k} ${y + k} ${x} ${y + r}Q${x - k} ${y + k} ${x - r} ${y}Q${x - k} ${y - k} ${x} ${y - r}Z`
+}
+
+/**
+ * Home page: a die, an arched door and coins on a table line.
+ * Plays an entrance once, then idles: the door creaks open with light behind it,
+ * sparkles twinkle. Tapping the die rolls it. Only transform/opacity are
+ * animated (see .hero-* in index.css), so it stays cheap on phones.
+ */
 export function HeroArt({ className = '' }: ArtProps) {
+  const [face, setFace] = useState(2)
+  const [roll, setRoll] = useState(0)
+  const timers = useRef<number[]>([])
+
+  const rollDie = useCallback(() => {
+    setRoll((n) => n + 1)
+    // Swap the face mid-spin, while it is blurred by the motion
+    timers.current.push(
+      window.setTimeout(() => setFace((f) => (f + 1 + Math.floor(Math.random() * 5)) % 6), ROLL_MS / 2),
+    )
+  }, [])
+
+  // One roll after the entrance hints that the die is tappable
+  useEffect(() => {
+    const pending = timers.current
+    pending.push(window.setTimeout(rollDie, 1900))
+    return () => pending.forEach(clearTimeout)
+  }, [rollDie])
+
   return (
     <svg viewBox="0 0 390 300" fill="none" className={className} aria-hidden="true">
-      <circle cx="330" cy="40" r="90" fill="var(--sand)" />
-      <path d="M150 300V170a60 60 0 0 1 120 0v130Z" fill="var(--terracotta)" />
-      <path d="M170 300V176a40 40 0 0 1 80 0v124Z" fill="var(--terracotta-deep)" />
-      <circle cx="236" cy="236" r="5" fill="var(--mustard)" />
-      <g className="animate-float origin-center [transform-box:fill-box]">
-        <g transform="rotate(-12 92 198)">
-          <rect x="44" y="150" width="96" height="96" rx="22" fill="var(--mustard)" />
-          <g fill="var(--cocoa)">
-            <circle cx="70" cy="176" r="8" />
-            <circle cx="92" cy="198" r="8" />
-            <circle cx="114" cy="220" r="8" />
+      <defs>
+        <radialGradient id="hero-glow" cx="0.5" cy="0.6" r="0.5">
+          <stop offset="0" stopColor="var(--mustard)" stopOpacity="0.55" />
+          <stop offset="1" stopColor="var(--mustard)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <g className="hero-sun">
+        <circle cx="330" cy="40" r="90" fill="var(--sand)" />
+      </g>
+
+      <g className="hero-door">
+        <ellipse className="hero-glow" cx="210" cy="215" rx="110" ry="95" fill="url(#hero-glow)" />
+        <path d="M150 300V170a60 60 0 0 1 120 0v130Z" fill="var(--terracotta)" />
+        <path d="M170 300V176a40 40 0 0 1 80 0v124Z" fill="#f6c46a" />
+        <path className="hero-leaf" d="M170 300V176a40 40 0 0 1 80 0v124Z" fill="var(--terracotta-deep)" />
+        {/* Moves with the leaf instead of scaling, so it stays round */}
+        <circle className="hero-knob" cx="236" cy="236" r="5" fill="var(--mustard)" />
+      </g>
+
+      <g className="hero-die-in">
+        <g className="animate-float [transform-box:fill-box]">
+          <g
+            key={roll}
+            className={`cursor-pointer ${roll ? 'hero-die-roll' : ''}`}
+            onClick={rollDie}
+          >
+            <g transform="rotate(-12 92 198)">
+              <rect x="44" y="150" width="96" height="96" rx="22" fill="var(--mustard)" />
+              <g fill="var(--cocoa)">
+                {DIE_FACES[face]!.map(([cx, cy]) => (
+                  <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="8" />
+                ))}
+              </g>
+            </g>
           </g>
         </g>
       </g>
-      <g className="animate-float-slow [transform-box:fill-box]">
-        <circle cx="306" cy="232" r="30" fill="var(--mustard)" />
-        <circle cx="306" cy="232" r="21" stroke="var(--cocoa)" strokeOpacity="0.35" strokeWidth="2" />
+
+      <g className="hero-coin-in [animation-delay:450ms]">
+        <g className="animate-float-slow [transform-box:fill-box]">
+          <circle cx="306" cy="232" r="30" fill="var(--mustard)" />
+          <circle cx="306" cy="232" r="21" stroke="var(--cocoa)" strokeOpacity="0.35" strokeWidth="2" />
+        </g>
       </g>
-      <circle cx="336" cy="268" r="22" fill="var(--amber)" />
-      <circle cx="336" cy="268" r="14" stroke="var(--cocoa)" strokeOpacity="0.35" strokeWidth="2" />
-      <path d="M30 300h330" stroke="var(--cocoa)" strokeWidth="2" />
+      <g className="hero-coin-in [animation-delay:600ms]">
+        <circle cx="336" cy="268" r="22" fill="var(--amber)" />
+        <circle cx="336" cy="268" r="14" stroke="var(--cocoa)" strokeOpacity="0.35" strokeWidth="2" />
+      </g>
+
+      <g fill="var(--mustard)">
+        <path className="hero-spark" d={sparkle(278, 188, 9)} />
+        <path className="hero-spark [animation-delay:1.3s]" d={sparkle(362, 222, 7)} />
+        <path className="hero-spark [animation-delay:2.4s]" d={sparkle(128, 128, 8)} />
+      </g>
+
+      <path className="hero-line" d="M30 300h330" stroke="var(--cocoa)" strokeWidth="2" pathLength={1} />
     </svg>
   )
 }
