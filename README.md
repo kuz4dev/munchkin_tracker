@@ -1,74 +1,44 @@
-# munchkin_tracker
+# Munchkin Tracker
 
-This template should help get you started developing with Vue 3 in Vite.
+Real-time level tracker for the Munchkin board game: every player edits their own
+stats from their phone and the whole table sees changes instantly.
 
-## Recommended IDE Setup
+| Path | What |
+|---|---|
+| `server/` | Go game server: WebSocket rooms, Postgres persistence |
+| `packages/core/` | Platform-independent game logic (protocol, store, connection) |
+| `apps/app/` | Expo (React Native) app for iOS, Android and web |
+| `legacy-web/` | Previous Vue web client, kept until the Expo app reaches parity |
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## Development
 
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+Requirements: Node 22, Go 1.25+, Docker.
 
 ```sh
-npm install
+npm install                 # workspaces: packages/core and apps/app
+docker compose up -d db     # Postgres on localhost:5433
 ```
 
-### Compile and Hot-Reload for Development
+Game server:
 
 ```sh
-npm run dev
+cd server && DATABASE_URL=postgres://munchkin:munchkin@localhost:5433/munchkin go run ./cmd/server
 ```
 
-### Type-Check, Compile and Minify for Production
+App (scan the QR code with Expo Go, or press `w` for web):
 
 ```sh
-npm run build
+npm run app
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+In development the app talks to the server on port 8080 of the machine running
+`expo start`, so a phone on the same Wi-Fi works without configuration. Production
+builds need `EXPO_PUBLIC_API_URL` (see `apps/app/.env.example`).
+
+## Tests
 
 ```sh
-npm run test:unit
+npm test                                   # packages/core
+npm run typecheck && npm run lint          # core and app
+cd server && go test ./...                 # server (set TEST_DATABASE_URL for Postgres tests)
 ```
-
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
-
-```sh
-# Install browsers for the first run
-npx playwright install
-
-# When testing on CI, must build the project first
-npm run build
-
-# Runs the end-to-end tests
-npm run test:e2e
-# Runs the tests only on Chromium
-npm run test:e2e -- --project=chromium
-# Runs the tests of a specific file
-npm run test:e2e -- tests/example.spec.ts
-# Runs the tests in debug mode
-npm run test:e2e -- --debug
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
-# munchkin_tracker

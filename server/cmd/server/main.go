@@ -166,7 +166,8 @@ func securityHeaders(next http.Handler) http.Handler {
 func allowedOrigins() []string {
 	raw := os.Getenv("ALLOWED_ORIGINS")
 	if raw == "" {
-		raw = "http://localhost:5173,http://localhost:3000"
+		// Vite (web) and Expo web dev servers
+		raw = "http://localhost:5173,http://localhost:8081,http://localhost:3000"
 	}
 	var origins []string
 	for _, o := range strings.Split(raw, ",") {

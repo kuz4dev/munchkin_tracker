@@ -1,31 +1,16 @@
-name: Frontend
+# The Vue web client, kept until the Expo app reaches feature parity.
+name: Legacy web
 
 on:
   push:
     branches: [main]
     paths:
-      - client/**
-      - e2e/**
-      - package.json
-      - package-lock.json
-      - vite.config.ts
-      - vitest.config.ts
-      - tsconfig*.json
-      - eslint.config.ts
-      - .oxlintrc.json
-      - .github/workflows/frontend.yml
+      - legacy-web/**
+      - .github/workflows/legacy-web.yml
   pull_request:
     paths:
-      - client/**
-      - e2e/**
-      - package.json
-      - package-lock.json
-      - vite.config.ts
-      - vitest.config.ts
-      - tsconfig*.json
-      - eslint.config.ts
-      - .oxlintrc.json
-      - .github/workflows/frontend.yml
+      - legacy-web/**
+      - .github/workflows/legacy-web.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,12 +23,16 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: legacy-web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: legacy-web/package-lock.json
       - run: npm ci
       - run: npm run type-check
       - run: npx oxlint .
