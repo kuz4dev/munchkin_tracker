@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,18 @@ type Postgres struct {
 
 // OpenPostgres connects to the database and applies pending migrations.
 func OpenPostgres(ctx context.Context, url string) (*Postgres, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+	// Poolers in transaction mode (PgBouncer, Neon's "-pooler" host) hand server
+	// connections to other clients between transactions, so pgx's cached named
+	// statements collide ("prepared statement name is already in use"). Unnamed
+	// statements work everywhere; the URL may still choose another mode.
+	if !strings.Contains(url, "default_query_exec_mode") {
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
