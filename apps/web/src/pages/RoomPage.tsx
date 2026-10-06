@@ -22,6 +22,7 @@ import { StatsEditor } from '@/components/StatsEditor'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { gameActions, gameStore, useGame, useGameShallow } from '@/game/store'
+import { useWakeLock } from '@/hooks/useWakeLock'
 
 export default function RoomPage() {
   const { code = '' } = useParams()
@@ -44,6 +45,9 @@ export default function RoomPage() {
     createdAt: s.createdAt,
     finishedAt: s.finishedAt,
   }))
+
+  // Keep the phone's screen on during the game
+  useWakeLock(!!me && !isFinished)
 
   const [finishOpen, setFinishOpen] = useState(false)
   const [suggestedWinner, setSuggestedWinner] = useState<string>()

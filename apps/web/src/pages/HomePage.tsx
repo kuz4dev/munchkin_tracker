@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { describeJoinError } from '@/game/errors'
 import { gameActions, useGame } from '@/game/store'
+import { InstallHint } from '@/pwa/InstallHint'
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -139,6 +140,7 @@ export default function HomePage() {
       <p className="mt-6 max-w-xs text-center text-xs text-muted-foreground/70">
         Создайте комнату и поделитесь кодом с другими игроками
       </p>
+      <InstallHint />
     </div>
   )
 }

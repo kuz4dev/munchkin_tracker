@@ -33,6 +33,16 @@ npm run dev
 
 Production builds talk to the server at `VITE_API_URL` (same origin if unset).
 
+The web app is a PWA: it can be installed to the home screen, keeps the screen
+on during a game and offers a reload when a new version is deployed. Icons are
+generated from `apps/web/public/icon.svg`:
+
+```sh
+cd apps/web && npx pwa-assets-generator
+```
+
+Test the production build (service worker, CSP) with `npm run build && npm run preview -w @munchkin/web`.
+
 ## Tests
 
 ```sh

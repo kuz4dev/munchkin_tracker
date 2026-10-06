@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#a8372a"/>
+  <!-- A sword, kept inside the central safe zone used by maskable icons -->
+  <g transform="rotate(-45 256 256)" fill="#faf8f5">
+    <path d="M256 92 L278 132 L278 300 L234 300 L234 132 Z"/>
+    <rect x="184" y="300" width="144" height="26" rx="13"/>
+    <rect x="243" y="326" width="26" height="70" rx="8"/>
+    <circle cx="256" cy="410" r="22"/>
+  </g>
+  <path d="M256 92 L278 132 L278 300 L256 300 Z" transform="rotate(-45 256 256)" fill="#ecdcc1"/>
+</svg>
