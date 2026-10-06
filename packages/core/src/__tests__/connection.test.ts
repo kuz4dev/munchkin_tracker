@@ -12,7 +12,9 @@ class MockSocket {
   close = vi.fn(() => {
     this.readyState = 3
   })
-  constructor(readonly url: string) {
+  readonly url: string
+  constructor(url: string) {
+    this.url = url
     MockSocket.instances.push(this)
   }
   open() {

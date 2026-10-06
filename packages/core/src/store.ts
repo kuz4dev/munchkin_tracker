@@ -79,6 +79,9 @@ const emptyRoom = {
 export function createGameStore({ connection, api, session }: GameStoreDeps): GameStore {
   let joinedOnce = false // the first join is sent by connectToRoom, later ones on reconnect
   let joinRetry: ReturnType<typeof setTimeout> | null = null
+  // A resume already in progress, so repeated calls (e.g. a component
+  // mounting twice) don't send a second join on the same connection.
+  let resuming: { code: string; result: Promise<ResumeResult> } | null = null
 
   const store = createStore<GameState & GameActions>()((set, get) => {
     function sendJoin() {
@@ -218,6 +221,25 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
       joinedOnce = true
     }
 
+    async function resume(code: string): Promise<ResumeResult> {
+      const saved = await session.load()
+      if (!saved || saved.roomCode !== code) return 'no_session'
+      try {
+        await api.getRoomInfo(code)
+      } catch (e) {
+        if (e instanceof ApiError && e.notFound) {
+          void session.clear()
+          set({ notice: Notices.roomNotFound })
+          return 'not_found'
+        }
+        // Server unreachable for now: keep the session to try again later
+        return 'error'
+      }
+      set({ notice: '', playerName: saved.playerName, roomCode: code, sessionId: saved.sessionId })
+      await connectToRoom()
+      return 'resumed'
+    }
+
     return {
       connectionStatus: connection.status,
       playerName: '',
@@ -238,25 +260,16 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
         await connectToRoom()
       },
 
-      async resumeSession(rawCode) {
+      resumeSession(rawCode) {
         const code = normalizeRoomCode(rawCode)
-        const saved = await session.load()
-        if (!saved || saved.roomCode !== code) return 'no_session'
-        try {
-          await api.getRoomInfo(code)
-        } catch (e) {
-          if (e instanceof ApiError && e.notFound) {
-            void session.clear()
-            set({ notice: Notices.roomNotFound })
-            return 'not_found'
-          }
-          // Server unreachable for now: keep the session to try again later
-          return 'error'
-        }
-        set({ notice: '', playerName: saved.playerName, roomCode: code, sessionId: saved.sessionId })
-        await connectToRoom()
-        return 'resumed'
+        if (resuming?.code === code) return resuming.result
+        const result = resume(code).finally(() => {
+          if (resuming?.result === result) resuming = null
+        })
+        resuming = { code, result }
+        return result
       },
+
 
       updateStats(stats) {
         const { players, playerId } = get()

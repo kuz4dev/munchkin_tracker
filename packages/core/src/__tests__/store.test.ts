@@ -102,6 +102,17 @@ describe('resumeSession', () => {
     expect(connection.sent[0]).toEqual({ type: 'join_room', roomCode: 'ABC234', playerName: 'Alice', sessionId: 'sess-9' })
   })
 
+  it('concurrent calls share one attempt (no second join on the socket)', async () => {
+    const { connection, session, s } = setup()
+    await session.save({ roomCode: 'ABC234', playerName: 'Alice', sessionId: 'sess-9' })
+
+    const [a, b] = await Promise.all([s().resumeSession('ABC234'), s().resumeSession('abc234')])
+
+    expect([a, b]).toEqual(['resumed', 'resumed'])
+    expect(connection.connect).toHaveBeenCalledTimes(1)
+    expect(connection.sent.filter((m) => m.type === 'join_room')).toHaveLength(1)
+  })
+
   it('ignores a session for another room', async () => {
     const { connection, session, s } = setup()
     await session.save({ roomCode: 'ZZZ999', playerName: 'Alice', sessionId: 's' })
