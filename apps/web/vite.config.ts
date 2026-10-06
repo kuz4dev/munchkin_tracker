@@ -44,6 +44,11 @@ function contentSecurityPolicy(apiUrl: string | undefined): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  build: {
+    // Small font subsets would be inlined as data: URLs, which the CSP
+    // (font-src 'self') blocks; keep every font a separate, cacheable file.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
+  },
   plugins: [
     react(),
     tailwindcss(),
