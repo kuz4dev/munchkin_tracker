@@ -16,6 +16,7 @@ import { ChangeLog } from '@/components/ChangeLog'
 import { CombatMode } from '@/components/CombatMode'
 import { FinishGameDialog } from '@/components/FinishGameDialog'
 import { GameSummary } from '@/components/GameSummary'
+import { InviteButton } from '@/components/InviteButton'
 import { PlayerCard } from '@/components/PlayerCard'
 import { RoomHeader } from '@/components/RoomHeader'
 import { StatsEditor } from '@/components/StatsEditor'
@@ -96,14 +97,6 @@ export default function RoomPage() {
     setFinishOpen(true)
   }
 
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(roomCode || code)
-    } catch {
-      // the code is visible anyway
-    }
-  }
-
   const journal = (
     <ChangeLog entries={changelog} hasOlder={hasOlder} loadingOlder={loadingOlder} onLoadOlder={() => gameActions().loadOlder()} />
   )
@@ -177,14 +170,8 @@ export default function RoomPage() {
                     ⏳
                   </div>
                   <p className="text-base font-medium text-muted-foreground">Ожидание других игроков...</p>
-                  <p className="mt-1 text-sm text-muted-foreground/70">Поделитесь кодом комнаты</p>
-                  <button
-                    type="button"
-                    onClick={copyCode}
-                    className="mt-3 rounded-lg bg-secondary px-4 py-2 font-mono text-sm font-bold tracking-wider transition-colors hover:bg-accent active:scale-95"
-                  >
-                    {roomCode}
-                  </button>
+                  <p className="mt-1 text-sm text-muted-foreground/70">Поделитесь кодом или ссылкой на комнату</p>
+                  <InviteButton code={roomCode} />
                 </div>
               )
             )}

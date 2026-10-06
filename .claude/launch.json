@@ -26,6 +26,19 @@
         "--strictPort"
       ],
       "port": 4173
+    },
+    {
+      "name": "web-lan",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "-w",
+        "@munchkin/web",
+        "--",
+        "--host"
+      ],
+      "port": 5173
     }
   ]
 }

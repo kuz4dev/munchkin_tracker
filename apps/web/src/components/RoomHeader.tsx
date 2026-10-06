@@ -1,6 +1,7 @@
 import { Check, Copy, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { copyText, inviteLink } from '@/lib/share'
 
 interface RoomHeaderProps {
   code: string
@@ -9,21 +10,16 @@ interface RoomHeaderProps {
 }
 
 export function RoomHeader({ code, connected, onLeave }: RoomHeaderProps) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null)
 
   useEffect(() => {
     if (!copied) return
-    const t = setTimeout(() => setCopied(false), 2000)
+    const t = setTimeout(() => setCopied(null), 2500)
     return () => clearTimeout(t)
   }, [copied])
 
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-    } catch {
-      // Clipboard unavailable (insecure context, denied): the code is on screen anyway
-    }
+  async function copyInvite() {
+    setCopied((await copyText(inviteLink(code))) ? 'ok' : 'failed')
   }
 
   return (
@@ -37,12 +33,12 @@ export function RoomHeader({ code, connected, onLeave }: RoomHeaderProps) {
             <h1 className="hidden truncate text-base font-bold sm:block sm:text-lg">Манчкин</h1>
             <button
               type="button"
-              onClick={copyCode}
-              aria-label={`Скопировать код комнаты ${code}`}
+              onClick={copyInvite}
+              aria-label={`Скопировать ссылку на комнату ${code}`}
               className="flex items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1.5 transition-colors hover:bg-accent active:scale-95"
             >
               <span className="font-mono text-sm font-bold tracking-wider text-foreground sm:text-base">{code}</span>
-              {copied ? (
+              {copied === 'ok' ? (
                 <Check className="size-4 shrink-0 text-game-green" aria-hidden="true" />
               ) : (
                 <Copy className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -72,6 +68,11 @@ export function RoomHeader({ code, connected, onLeave }: RoomHeaderProps) {
           </div>
         </div>
       </div>
+      {copied && (
+        <p role="status" className="pb-2 text-center text-xs text-muted-foreground">
+          {copied === 'ok' ? 'Ссылка на комнату скопирована' : `Не удалось скопировать. Код комнаты: ${code}`}
+        </p>
+      )}
     </header>
   )
 }

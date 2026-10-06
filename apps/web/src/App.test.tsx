@@ -24,6 +24,8 @@ describe('App routes', () => {
         <App />
       </MemoryRouter>,
     )
+    // While its code downloads, a loading screen shows instead of a blank page
+    expect(screen.getByRole('status')).toHaveTextContent('Загрузка...')
     // No stored session: the lazily loaded room screen redirects home
     expect(await screen.findByRole('heading', { name: 'Манчкин' })).toBeInTheDocument()
   })
