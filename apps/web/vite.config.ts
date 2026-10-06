@@ -8,19 +8,20 @@ const THEME_COLOR = '#fbf1e4'
 
 /**
  * Adds a Content-Security-Policy to the built index.html. Only our own
- * scripts run, and the page talks only to itself and the API, so even an
+ * scripts run (plus Cloudflare Web Analytics, which Pages injects), and the
+ * page talks only to itself, the API and the analytics endpoint, so even an
  * injected script couldn't load code or send the session token elsewhere.
  * (frame-ancestors can't be set from a meta tag: see public/_headers.)
  */
 function contentSecurityPolicy(apiUrl: string | undefined): Plugin {
-  const connect = ["'self'"]
+  const connect = ["'self'", 'https://cloudflareinsights.com']
   if (apiUrl) {
     const api = new URL(apiUrl)
     connect.push(api.origin, `${api.protocol === 'https:' ? 'wss:' : 'ws:'}//${api.host}`)
   }
   const policy = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://static.cloudflareinsights.com",
     // UI components position popovers with inline styles
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",

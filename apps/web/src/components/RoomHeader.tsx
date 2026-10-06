@@ -1,6 +1,7 @@
 import { Check, Copy, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { SwordMark } from '@/components/art'
+import { track } from '@/lib/metrics'
 import { copyText, inviteLink } from '@/lib/share'
 
 interface RoomHeaderProps {
@@ -19,7 +20,9 @@ export function RoomHeader({ code, connected, onLeave }: RoomHeaderProps) {
   }, [copied])
 
   async function copyInvite() {
-    setCopied((await copyText(inviteLink(code))) ? 'ok' : 'failed')
+    const ok = await copyText(inviteLink(code))
+    if (ok) track('invite')
+    setCopied(ok ? 'ok' : 'failed')
   }
 
   return (

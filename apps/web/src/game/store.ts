@@ -13,7 +13,7 @@ import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 
 // In development the Vite proxy serves /api and /ws from the same origin.
-const apiUrl = import.meta.env.VITE_API_URL ?? ''
+export const apiUrl = import.meta.env.VITE_API_URL ?? ''
 
 function browserSessionStorage(): SessionStorage {
   try {

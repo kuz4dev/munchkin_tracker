@@ -1,6 +1,7 @@
 import { Check, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { track } from '@/lib/metrics'
 import { shareInvite, type ShareResult } from '@/lib/share'
 
 const messages: Partial<Record<ShareResult, string>> = {
@@ -22,7 +23,11 @@ export function InviteButton({ code }: { code: string }) {
     <div className="mt-3 flex flex-col items-center gap-2">
       <Button
         className="h-12 rounded-full bg-cocoa px-5 font-display text-base font-semibold tracking-[3px] text-primary-foreground hover:bg-cocoa/90"
-        onClick={async () => setResult(await shareInvite(code))}
+        onClick={async () => {
+          const result = await shareInvite(code)
+          if (result === 'shared' || result === 'copied') track('invite')
+          setResult(result)
+        }}
         aria-label={`Пригласить игроков в комнату ${code}`}
       >
         {code}

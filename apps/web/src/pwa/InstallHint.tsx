@@ -1,6 +1,12 @@
 import { Download, Share } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { track } from '@/lib/metrics'
 import { isIosSafari, isStandalone, promptInstall, useCanInstall } from './install'
+
+async function install() {
+  track('install_click')
+  if (await promptInstall()) track('install_accepted')
+}
 
 /** Invites the user to add the app to the home screen (shown on the home page). */
 export function InstallHint() {
@@ -9,7 +15,7 @@ export function InstallHint() {
 
   if (canInstall) {
     return (
-      <Button variant="ghost" className="h-11 px-0 text-[15px] font-bold text-primary hover:bg-transparent hover:text-terracotta-deep" onClick={() => void promptInstall()}>
+      <Button variant="ghost" className="h-11 px-0 text-[15px] font-bold text-primary hover:bg-transparent hover:text-terracotta-deep" onClick={() => void install()}>
         <Download aria-hidden="true" />
         Установить на телефон
       </Button>
