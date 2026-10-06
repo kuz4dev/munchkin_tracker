@@ -1,0 +1,42 @@
+# Shared game logic (packages/core) and the React web app (apps/web).
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/**
+      - apps/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/web.yml
+  pull_request:
+    paths:
+      - packages/**
+      - apps/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/web.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow token can only read the repository.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

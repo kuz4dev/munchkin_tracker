@@ -5,15 +5,30 @@
       "name": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
-        "--prefix",
-        "legacy-web",
         "run",
-        "dev"
+        "dev",
+        "-w",
+        "@munchkin/web"
       ],
       "port": 5173
     },
     {
-      "name": "web-preview",
+      "name": "legacy-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "legacy-web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "legacy-web-preview",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
@@ -26,23 +41,6 @@
         "--strictPort"
       ],
       "port": 4173
-    },
-    {
-      "name": "app-web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "web",
-        "--workspace",
-        "@munchkin/app",
-        "--",
-        "--port",
-        "8081"
-      ],
-      "port": 8081,
-      "env": {
-        "CI": "1"
-      }
     }
   ]
 }

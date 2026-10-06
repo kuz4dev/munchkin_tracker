@@ -1,7 +1,7 @@
 {
   "name": "munchkin-tracker",
   "private": true,
-  "description": "Real-time Munchkin level tracker: Go server, shared core, Expo app (iOS/Android/web)",
+  "description": "Real-time Munchkin level tracker: Go server, shared core, React web app (PWA)",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -10,8 +10,8 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "app": "npm run start -w @munchkin/app",
-    "app:web": "npm run web -w @munchkin/app"
+    "dev": "npm run dev -w @munchkin/web",
+    "build": "npm run build -w @munchkin/web"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
