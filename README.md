@@ -8,7 +8,6 @@ stats from their phone and the whole table sees changes instantly.
 | `server/` | Go game server: WebSocket rooms, Postgres persistence |
 | `packages/core/` | Platform-independent game logic (protocol, store, connection) |
 | `apps/web/` | React web app (Vite, Tailwind, shadcn/ui), installable as a PWA |
-| `legacy-web/` | Previous Vue web client, kept until the React app reaches parity |
 
 ## Development
 

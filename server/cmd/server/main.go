@@ -166,8 +166,8 @@ func securityHeaders(next http.Handler) http.Handler {
 func allowedOrigins() []string {
 	raw := os.Getenv("ALLOWED_ORIGINS")
 	if raw == "" {
-		// Vite dev servers: the web app (5173) and the legacy Vue client (5174)
-		raw = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
+		// Vite dev server and `vite preview` of the web app
+		raw = "http://localhost:5173,http://localhost:4173"
 	}
 	var origins []string
 	for _, o := range strings.Split(raw, ",") {
