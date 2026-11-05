@@ -94,6 +94,12 @@ describe('RoomPage in a game', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Остаться' }))
     expect(leaveRoom).not.toHaveBeenCalled()
 
+    // Like every other sheet: the cross closes it without leaving
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти из комнаты' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Закрыть' }))
+    expect(leaveRoom).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
     await userEvent.click(screen.getByRole('button', { name: 'Выйти из комнаты' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     expect(leaveRoom).toHaveBeenCalled()
