@@ -57,16 +57,35 @@ describe('StatsEditor', () => {
 })
 
 describe('PlayerCard', () => {
-  it('shows stats, traits, host and offline marks', () => {
-    const { rerender } = render(<PlayerCard player={player('p2', 'Bob', { level: 5, gearBonus: 3, race: 'elf' })} />)
+  it('shows every stat, host and offline marks', () => {
+    const { rerender } = render(<PlayerCard player={player('p2', 'Bob', { level: 5, gearBonus: 3, race: 'elf', gender: 'female' })} />)
     expect(screen.getByText('8')).toBeInTheDocument()
-    expect(screen.getByText(/Эльф · Без класса · ур\. 5 · бонусы 3/)).toBeInTheDocument()
-    expect(screen.queryByText(/не в сети/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/хост/)).not.toBeInTheDocument()
+    expect(screen.getByText('Уровень').nextSibling).toHaveTextContent('5')
+    expect(screen.getByText('Бонусы').nextSibling).toHaveTextContent('3')
+    for (const trait of ['Женский', 'Эльф', 'Без класса']) expect(screen.getByText(trait)).toBeInTheDocument()
+    expect(screen.queryByText('Не в сети')).not.toBeInTheDocument()
+    expect(screen.queryByText('Хост')).not.toBeInTheDocument()
 
     rerender(<PlayerCard player={player('p2', 'Bob', { connected: false })} isHost />)
-    expect(screen.getByText(/не в сети/)).toBeInTheDocument()
-    expect(screen.getByText(/хост/)).toBeInTheDocument()
+    expect(screen.getByText('Не в сети')).toBeInTheDocument()
+    expect(screen.getByText('Хост')).toBeInTheDocument()
+    expect(screen.getByText('Человек')).toBeInTheDocument() // traits stay visible offline
+  })
+
+  it('shows two races and classes with their cards', () => {
+    render(<PlayerCard player={player('p2', 'Bob', { race: 'elf', race2: 'orc', halfBreed: true, class: 'wizard', class2: 'bard', superMunchkin: true })} />)
+    expect(screen.getByText('Эльф + Орк')).toBeInTheDocument()
+    expect(screen.getByText('Волшебник + Бард')).toBeInTheDocument()
+    expect(screen.getByText('Полукровка')).toBeInTheDocument()
+    expect(screen.getByText('Суперманчкин')).toBeInTheDocument()
+  })
+
+  it('fills the level tile up to the end level', () => {
+    const { container, rerender } = render(<PlayerCard player={player('p2', 'Bob', { level: 5 })} />)
+    const fill = () => container.querySelector<HTMLElement>('dl [aria-hidden="true"]')!.style.width
+    expect(fill()).toBe('50%')
+    rerender(<PlayerCard player={player('p2', 'Bob', { level: 5 })} endLevel={20} />)
+    expect(fill()).toBe('25%')
   })
 })
 
