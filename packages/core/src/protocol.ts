@@ -35,7 +35,7 @@ export interface ChangeLogEntry {
    * For 'die': oldValue and newValue hold "level/gear".
    * For 'end_level': oldValue and newValue hold the winning level.
    */
-  eventType: 'join' | 'leave' | 'stat_change' | 'finish' | 'flee' | 'die' | 'end_level'
+  eventType: 'join' | 'leave' | 'stat_change' | 'finish' | 'flee' | 'die' | 'end_level' | 'host_change'
   field?: string
   oldValue?: string
   newValue?: string

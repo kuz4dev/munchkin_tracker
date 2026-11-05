@@ -29,6 +29,10 @@ const (
 	// OfflineRoomTTL is how long a game survives with all players offline
 	// (phones fall asleep during long games).
 	OfflineRoomTTL = 2 * time.Hour
+	// HostAwayTTL is how long the host may stay offline before the role passes
+	// on, so a host who closed the app for good doesn't block finishing the
+	// game. Long enough to survive a sleeping phone or a short walk away.
+	HostAwayTTL = 5 * time.Minute
 )
 
 // MsgSessionReplaced is sent to a connection whose session was taken over by
@@ -69,6 +73,7 @@ type seat struct {
 	sessionHash string
 	client      Client // nil while offline
 	joinedAt    time.Time
+	awaySince   time.Time // when the player went offline; meaningless while online
 }
 
 // Room holds the state of one game. All mutations and the broadcasts they
@@ -84,7 +89,7 @@ type Room struct {
 	winnerID   string
 	finishedAt time.Time
 	// hostID is the player who may finish the game: whoever joined first.
-	// It passes on only when the host leaves, not when they are offline.
+	// It passes on when the host leaves or stays offline for HostAwayTTL.
 	hostID    string
 	endLevel  int
 	seats     map[string]*seat // player ID -> seat
@@ -133,6 +138,8 @@ func RestoreRoom(g *store.LoadedGame, persist Persister) *Room {
 			player:      &models.Player{ID: s.ID, Name: s.Name, Stats: s.Stats},
 			sessionHash: s.SessionHash,
 			joinedAt:    s.JoinedAt,
+			// Counts from the restart, so a deploy doesn't cost the host the role
+			awaySince: time.Now(),
 		}
 		r.seats[st.player.ID] = st
 		r.bySession[st.sessionHash] = st
@@ -170,12 +177,20 @@ func (r *Room) setHostLocked(playerID string) {
 	r.broadcastLocked(models.OutgoingMessage{Type: "host_changed", HostID: playerID})
 }
 
-// longestSeatedLocked returns the player who joined first, or "" if none.
+// longestSeatedLocked returns the player who joined first, preferring those
+// online, or "" if there are no players.
 func (r *Room) longestSeatedLocked() string {
 	var first *seat
 	for _, s := range r.seats {
-		if first == nil || s.joinedAt.Before(first.joinedAt) ||
-			(s.joinedAt.Equal(first.joinedAt) && s.player.ID < first.player.ID) {
+		switch {
+		case first == nil:
+			first = s
+		case (s.client != nil) != (first.client != nil):
+			if s.client != nil {
+				first = s
+			}
+		case s.joinedAt.Before(first.joinedAt) ||
+			(s.joinedAt.Equal(first.joinedAt) && s.player.ID < first.player.ID):
 			first = s
 		}
 	}
@@ -317,10 +332,35 @@ func (r *Room) Disconnect(c Client) {
 func (r *Room) disconnectLocked(c Client, s *seat) {
 	delete(r.byClient, c.ID())
 	s.client = nil
+	s.awaySince = time.Now()
 	s.player.Connected = false
 	r.updateIdleLocked()
 
 	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: s.player})
+}
+
+// PassHostIfAway hands the host role to a player who is online if the host has
+// been offline for HostAwayTTL. The former host stays in the game as a regular
+// player: giving the role back on return would make it jump around.
+func (r *Room) PassHostIfAway(now time.Time) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.closed || r.status != store.StatusActive {
+		return false
+	}
+	host := r.seats[r.hostID]
+	if host != nil && (host.client != nil || now.Sub(host.awaySince) < HostAwayTTL) {
+		return false
+	}
+	next := r.seats[r.longestSeatedLocked()]
+	if next == nil || next.client == nil {
+		return false
+	}
+	r.setHostLocked(next.player.ID)
+	entry := r.appendEventLocked(next.player, "host_change", "", "", "")
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	return true
 }
 
 // Finish ends the game. winnerID may be empty to finish without a winner.

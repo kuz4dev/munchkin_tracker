@@ -120,6 +120,15 @@ func (m *Manager) TouchOnline(now time.Time) {
 	}
 }
 
+// PassAwayHosts moves the host role away from hosts who have been gone too long.
+func (m *Manager) PassAwayHosts(now time.Time) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, r := range m.rooms {
+		r.PassHostIfAway(now)
+	}
+}
+
 // RunJanitor periodically removes idle rooms until stop is closed.
 func (m *Manager) RunJanitor(interval time.Duration, stop <-chan struct{}) {
 	ticker := time.NewTicker(interval)
@@ -131,6 +140,7 @@ func (m *Manager) RunJanitor(interval time.Duration, stop <-chan struct{}) {
 			if n := m.Cleanup(now); n > 0 {
 				log.Printf("janitor removed %d idle room(s)", n)
 			}
+			m.PassAwayHosts(now)
 			m.TouchOnline(now)
 		case <-stop:
 			return

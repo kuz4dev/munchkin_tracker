@@ -94,6 +94,8 @@ export function describeGroup(group: ChangeLogGroup): string {
       const roll = Number(group.lastNewValue)
       return `${name} смывается: выпало ${roll}, ${fleeSucceeded(roll) ? 'удалось' : 'не вышло'}`
     }
+    case 'host_change':
+      return `${name}: теперь хост, прежний давно не в сети`
     case 'end_level':
       return `${name}: игра до ${group.lastNewValue} уровня`
     case 'die':

@@ -472,6 +472,12 @@ describe('DeathDialog', () => {
 describe('TableEventToast', () => {
   const now = () => Date.now()
 
+  it('tells everyone about a new host, the new host too', () => {
+    const change = entry({ seq: 1, playerId: 'p1', playerName: 'Alice', eventType: 'host_change', timestamp: now() })
+    render(<TableEventToast entries={[change]} playerId="p1" />)
+    expect(screen.getByRole('status')).toHaveTextContent('Alice: теперь хост')
+  })
+
   it('tells about others, not about us or old history, and goes away', () => {
     vi.useFakeTimers()
     try {

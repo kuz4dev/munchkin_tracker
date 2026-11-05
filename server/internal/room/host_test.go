@@ -118,3 +118,126 @@ func TestHost_AssignedToGamesFromBeforeHosts(t *testing.T) {
 		t.Errorf("expected SetHost s1, got %#v", ops[0])
 	}
 }
+
+func TestHost_PassesAfterBeingAway(t *testing.T) {
+	r := NewRoom("TEST", nil)
+	alice := &mockClient{id: "a"}
+	mustJoin(t, r, alice, "Alice", "")
+	time.Sleep(time.Millisecond)
+	bob := &mockClient{id: "b"}
+	bobPlayer := mustJoin(t, r, bob, "Bob", "")
+	time.Sleep(time.Millisecond)
+	carol := &mockClient{id: "c"}
+	mustJoin(t, r, carol, "Carol", "")
+	aliceSession := sessionOf(t, alice)
+
+	now := time.Now()
+	if r.PassHostIfAway(now.Add(time.Hour)) {
+		t.Fatal("a host who is online keeps the role")
+	}
+	r.Disconnect(alice)
+	if r.PassHostIfAway(time.Now().Add(HostAwayTTL - time.Minute)) {
+		t.Fatal("a short absence must not cost the role")
+	}
+	if err := r.Finish(bob, ""); err != ErrNotHost {
+		t.Fatalf("still hosted by Alice: %v", err)
+	}
+
+	carol.reset()
+	if !r.PassHostIfAway(time.Now().Add(HostAwayTTL + time.Minute)) {
+		t.Fatal("a long absence should pass the role on")
+	}
+	if msg, ok := carol.last("host_changed"); !ok || msg.HostID != bobPlayer.ID {
+		t.Fatalf("expected the role to go to Bob, got %+v", msg)
+	}
+	entry, _ := carol.last("changelog_entry")
+	if e := entry.ChangeLogEntry; e.EventType != "host_change" || e.PlayerName != "Bob" {
+		t.Errorf("unexpected journal entry: %+v", e)
+	}
+
+	// Alice comes back as a regular player and the role doesn't jump back
+	alice2 := &mockClient{id: "a2"}
+	mustJoin(t, r, alice2, "Alice", aliceSession)
+	if state, _ := alice2.last("room_state"); state.HostID != bobPlayer.ID {
+		t.Errorf("Bob should stay host, got %q", state.HostID)
+	}
+	if r.PassHostIfAway(time.Now().Add(time.Hour)) {
+		t.Error("nothing to pass while the new host is online")
+	}
+	if err := r.Finish(bob, ""); err != nil {
+		t.Errorf("the new host can finish: %v", err)
+	}
+}
+
+func TestHost_NeverPassesToSomeoneOffline(t *testing.T) {
+	r := NewRoom("TEST", nil)
+	alice := &mockClient{id: "a"}
+	alicePlayer := mustJoin(t, r, alice, "Alice", "")
+	bob := &mockClient{id: "b"}
+	mustJoin(t, r, bob, "Bob", "")
+	r.Disconnect(bob)
+	r.Disconnect(alice)
+
+	if r.PassHostIfAway(time.Now().Add(time.Hour)) {
+		t.Fatal("nobody online: the role stays")
+	}
+	alice2 := &mockClient{id: "a2"}
+	if _, err := r.Join(alice2, "Alice", sessionOf(t, alice)); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := alice2.last("room_state"); state.HostID != alicePlayer.ID {
+		t.Errorf("Alice should still host, got %q", state.HostID)
+	}
+}
+
+func TestHost_LeavingPrefersSomeoneOnline(t *testing.T) {
+	r := NewRoom("TEST", nil)
+	alice := &mockClient{id: "a"}
+	mustJoin(t, r, alice, "Alice", "")
+	time.Sleep(time.Millisecond)
+	bob := &mockClient{id: "b"}
+	mustJoin(t, r, bob, "Bob", "") // seated longer, but offline
+	time.Sleep(time.Millisecond)
+	carol := &mockClient{id: "c"}
+	carolPlayer := mustJoin(t, r, carol, "Carol", "")
+	r.Disconnect(bob)
+
+	r.Leave(alice)
+	if msg, ok := carol.last("host_changed"); !ok || msg.HostID != carolPlayer.ID {
+		t.Errorf("expected the role to go to Carol, got %+v", msg)
+	}
+}
+
+func TestHost_NotPassedInFinishedGameOrRightAfterRestart(t *testing.T) {
+	r := NewRoom("TEST", nil)
+	alice := &mockClient{id: "a"}
+	mustJoin(t, r, alice, "Alice", "")
+	bob := &mockClient{id: "b"}
+	mustJoin(t, r, bob, "Bob", "")
+	r.Disconnect(alice)
+	if err := r.Finish(alice, ""); err != ErrNotInRoom {
+		t.Fatalf("offline host can't finish: %v", err)
+	}
+	alice2 := &mockClient{id: "a2"}
+	mustJoin(t, r, alice2, "Alice", sessionOf(t, alice))
+	if err := r.Finish(alice2, ""); err != nil {
+		t.Fatal(err)
+	}
+	r.Disconnect(alice2)
+	if r.PassHostIfAway(time.Now().Add(time.Hour)) {
+		t.Error("a finished game has no use for a host")
+	}
+
+	restored := RestoreRoom(&store.LoadedGame{
+		Game:  store.Game{ID: "g", Code: "CODE", HostSeatID: "h"},
+		Seats: []store.Seat{{ID: "h", Name: "Host", SessionHash: "x"}, {ID: "o", Name: "Other", SessionHash: "y", JoinedAt: time.Now()}},
+	}, nil)
+	other := &mockClient{id: "o"}
+	mustJoin(t, restored, other, "New", "")
+	if restored.PassHostIfAway(time.Now().Add(time.Minute)) {
+		t.Error("the grace period restarts after a server restart")
+	}
+	if !restored.PassHostIfAway(time.Now().Add(HostAwayTTL + time.Minute)) {
+		t.Error("the role passes once the grace period is over")
+	}
+}

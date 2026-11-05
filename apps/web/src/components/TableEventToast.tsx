@@ -1,14 +1,17 @@
 import { describeGroup, groupChangelog, type ChangeLogEntry } from '@munchkin/core'
-import { Dices, Skull } from 'lucide-react'
+import { Crown, Dices, Skull } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const SHOW_MS = 4000
 /** Events this long before the screen opened are history that came with the join, not news. */
 const NEWS_MS = 15_000
 
-/** Tells the table when someone else rolled to flee or died. */
+/** Tells the table when someone else rolled to flee or died, or the host changed. */
 export function TableEventToast({ entries, playerId }: { entries: ChangeLogEntry[]; playerId: string }) {
-  const news = entries.filter((e) => (e.eventType === 'flee' || e.eventType === 'die') && e.playerId !== playerId).at(-1)
+  // Everyone hears about a new host, the new host included; the rest is news only for others
+  const news = entries
+    .filter((e) => e.eventType === 'host_change' || ((e.eventType === 'flee' || e.eventType === 'die') && e.playerId !== playerId))
+    .at(-1)
   const newsSeq = news?.seq
   const [expiredSeq, setExpiredSeq] = useState(0)
   const [openedAt] = useState(() => Date.now())
@@ -30,6 +33,8 @@ export function TableEventToast({ entries, playerId }: { entries: ChangeLogEntry
       >
         {shown.eventType === 'flee' ? (
           <Dices className="size-6 shrink-0 text-mustard" aria-hidden="true" />
+        ) : shown.eventType === 'host_change' ? (
+          <Crown className="size-6 shrink-0 text-mustard" aria-hidden="true" />
         ) : (
           <Skull className="size-6 shrink-0 text-mustard" aria-hidden="true" />
         )}

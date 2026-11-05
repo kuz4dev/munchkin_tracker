@@ -138,3 +138,9 @@ describe('second race and class', () => {
     expect(classLabel({ class: 'wizard', class2: 'bard' })).toBe('Волшебник + Бард')
   })
 })
+
+describe('host change in the journal', () => {
+  it('explains why the role moved', () => {
+    expect(describeGroup(groupChangelog([e({ eventType: 'host_change' })])[0]!)).toBe('Igor: теперь хост, прежний давно не в сети')
+  })
+})
