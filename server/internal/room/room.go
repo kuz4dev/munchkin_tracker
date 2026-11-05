@@ -395,8 +395,15 @@ func (r *Room) UpdateStats(c Client, stats models.Stats) error {
 	diff("level", strconv.Itoa(old.Level), strconv.Itoa(stats.Level))
 	diff("gearBonus", strconv.Itoa(old.GearBonus), strconv.Itoa(stats.GearBonus))
 	diff("gender", old.Gender, stats.Gender)
-	diff("race", old.Race, stats.Race)
-	diff("class", old.Class, stats.Class)
+	diff("race", old.RaceValue(), stats.RaceValue())
+	diff("class", old.ClassValue(), stats.ClassValue())
+	// A card matters on its own only while the race or class stays the same
+	if old.RaceValue() == stats.RaceValue() {
+		diff("halfBreed", yesNo(old.HalfBreed), yesNo(stats.HalfBreed))
+	}
+	if old.ClassValue() == stats.ClassValue() {
+		diff("superMunchkin", yesNo(old.SuperMunchkin), yesNo(stats.SuperMunchkin))
+	}
 
 	if len(changes) == 0 {
 		return nil
@@ -410,6 +417,13 @@ func (r *Room) UpdateStats(c Client, stats models.Stats) error {
 	}
 	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: player})
 	return nil
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
 }
 
 // SetEndLevel changes the level that wins the game, for tables playing longer

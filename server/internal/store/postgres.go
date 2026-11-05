@@ -87,14 +87,15 @@ func queueOp(b *pgx.Batch, op Op) error {
 			g.ID, g.Code, g.Status, g.CreatedAt, g.LastActivityAt, g.EndLevel)
 	case AddSeat:
 		s := op.Seat
-		b.Queue(`INSERT INTO game_seats (id, game_id, session_hash, name, level, gear_bonus, gender, race, class, joined_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			s.ID, s.GameID, s.SessionHash, s.Name, s.Level, s.GearBonus, s.Gender, s.Race, s.Class, s.JoinedAt)
+		b.Queue(`INSERT INTO game_seats (id, game_id, session_hash, name, level, gear_bonus, gender, race, class, joined_at, half_breed, race2, super_munchkin, class2)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+			s.ID, s.GameID, s.SessionHash, s.Name, s.Level, s.GearBonus, s.Gender, s.Race, s.Class, s.JoinedAt, s.HalfBreed, s.Race2, s.SuperMunchkin, s.Class2)
 		queueTouch(b, s.GameID, s.JoinedAt)
 	case UpdateSeatStats:
 		st := op.Stats
-		b.Queue(`UPDATE game_seats SET level = $2, gear_bonus = $3, gender = $4, race = $5, class = $6 WHERE id = $1`,
-			op.SeatID, st.Level, st.GearBonus, st.Gender, st.Race, st.Class)
+		b.Queue(`UPDATE game_seats SET level = $2, gear_bonus = $3, gender = $4, race = $5, class = $6,
+				half_breed = $7, race2 = $8, super_munchkin = $9, class2 = $10 WHERE id = $1`,
+			op.SeatID, st.Level, st.GearBonus, st.Gender, st.Race, st.Class, st.HalfBreed, st.Race2, st.SuperMunchkin, st.Class2)
 	case RemoveSeat:
 		b.Queue(`UPDATE game_seats SET left_at = $2 WHERE id = $1`, op.SeatID, op.At)
 	case AppendEvent:
@@ -151,7 +152,7 @@ func (p *Postgres) LoadActiveGame(ctx context.Context, code string, activeSince 
 	loaded := &LoadedGame{Game: g}
 
 	rows, err := p.pool.Query(ctx,
-		`SELECT id::text, game_id::text, session_hash, name, level, gear_bonus, gender, race, class, joined_at
+		`SELECT id::text, game_id::text, session_hash, name, level, gear_bonus, gender, race, class, joined_at, half_breed, race2, super_munchkin, class2
 		FROM game_seats WHERE game_id = $1 AND left_at IS NULL ORDER BY joined_at`, g.ID)
 	if err != nil {
 		return nil, err
@@ -159,7 +160,8 @@ func (p *Postgres) LoadActiveGame(ctx context.Context, code string, activeSince 
 	loaded.Seats, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (Seat, error) {
 		var s Seat
 		err := row.Scan(&s.ID, &s.GameID, &s.SessionHash, &s.Name,
-			&s.Level, &s.GearBonus, &s.Gender, &s.Race, &s.Class, &s.JoinedAt)
+			&s.Level, &s.GearBonus, &s.Gender, &s.Race, &s.Class, &s.JoinedAt,
+			&s.HalfBreed, &s.Race2, &s.SuperMunchkin, &s.Class2)
 		return s, err
 	})
 	if err != nil {

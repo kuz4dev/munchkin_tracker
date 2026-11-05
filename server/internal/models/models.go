@@ -32,6 +32,28 @@ type Stats struct {
 	Gender    string `json:"gender"`
 	Race      string `json:"race"`
 	Class     string `json:"class"`
+	// HalfBreed and SuperMunchkin are the cards that allow a second race or
+	// class. The second one is optional: the card also works with just one.
+	HalfBreed     bool   `json:"halfBreed,omitempty"`
+	Race2         string `json:"race2,omitempty"`
+	SuperMunchkin bool   `json:"superMunchkin,omitempty"`
+	Class2        string `json:"class2,omitempty"`
+}
+
+// RaceValue is the race as it appears in the journal, e.g. "elf+orc".
+func (s Stats) RaceValue() string {
+	if s.Race2 == "" {
+		return s.Race
+	}
+	return s.Race + "+" + s.Race2
+}
+
+// ClassValue is the class as it appears in the journal, e.g. "wizard+bard".
+func (s Stats) ClassValue() string {
+	if s.Class2 == "" {
+		return s.Class
+	}
+	return s.Class + "+" + s.Class2
 }
 
 func DefaultStats() Stats {
@@ -53,6 +75,12 @@ func (s Stats) Validate() error {
 	}
 	if !validClasses[s.Class] {
 		return errors.New("invalid class")
+	}
+	if s.Race2 != "" && (!s.HalfBreed || !validRaces[s.Race2] || s.Race2 == s.Race) {
+		return errors.New("invalid second race")
+	}
+	if s.Class2 != "" && (!s.SuperMunchkin || !validClasses[s.Class2] || s.Class2 == "none" || s.Class == "none" || s.Class2 == s.Class) {
+		return errors.New("invalid second class")
 	}
 	return nil
 }

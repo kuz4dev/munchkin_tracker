@@ -185,6 +185,19 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 		}
 	})
 
+	t.Run("second race and class survive a reload", func(t *testing.T) {
+		st := newStore(t)
+		g := newGame("DOUBLE", base)
+		s := newSeat(g, "Alice", base)
+		both := models.DefaultStats()
+		both.Class, both.HalfBreed, both.Race2, both.SuperMunchkin, both.Class2 = "wizard", true, "orc", true, "bard"
+		mustApply(t, st, CreateGame{g}, AddSeat{s}, UpdateSeatStats{SeatID: s.ID, Stats: both})
+		loaded, err := st.LoadActiveGame(ctx, "DOUBLE", time.Time{})
+		if err != nil || loaded == nil || loaded.Seats[0].Stats != both {
+			t.Errorf("expected %+v, got %+v (%v)", both, loaded, err)
+		}
+	})
+
 	t.Run("end level survives a reload", func(t *testing.T) {
 		st := newStore(t)
 		g := newGame("LEVEL1", base)
