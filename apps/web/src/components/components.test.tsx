@@ -176,15 +176,9 @@ describe('CombatMode, several allies', () => {
 describe('EndLevelControl', () => {
   const players = [player('p1', 'Alice', { level: 12 }), player('p2', 'Bob')]
 
-  it('is plain text for guests', () => {
-    render(<EndLevelControl endLevel={20} players={players} isHost={false} connected onChange={() => {}} />)
-    expect(screen.getByText('Игра до 20 уровня')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
   it('lets the host change it, not below the highest level', async () => {
     const onChange = vi.fn()
-    render(<EndLevelControl endLevel={12} players={players} isHost connected onChange={onChange} />)
+    render(<EndLevelControl endLevel={12} players={players} connected onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: 'Игра до 12 уровня, изменить' }))
 
     expect(screen.getByRole('button', { name: 'Меньше' })).toBeDisabled()

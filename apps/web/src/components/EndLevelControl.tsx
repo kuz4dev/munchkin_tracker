@@ -9,17 +9,14 @@ const PRESETS = [DEFAULT_END_LEVEL, 15, 20, 30]
 interface EndLevelControlProps {
   endLevel: number
   players: Player[]
-  isHost: boolean
   connected: boolean
   onChange: (level: number) => void
 }
 
-/** Shows what level wins the game. The host can change it, for longer games with expansions. */
-export function EndLevelControl({ endLevel, players, isHost, connected, onChange }: EndLevelControlProps) {
+/** Lets the host change what level wins the game, for longer games with expansions. */
+export function EndLevelControl({ endLevel, players, connected, onChange }: EndLevelControlProps) {
   const [open, setOpen] = useState(false)
   const label = `Игра до ${endLevel} уровня`
-
-  if (!isHost) return <p className="text-center text-[13px] font-semibold text-muted-foreground">{label}</p>
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

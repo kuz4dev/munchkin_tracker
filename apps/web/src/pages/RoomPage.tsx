@@ -188,15 +188,13 @@ export default function RoomPage() {
                 </Button>
               )}
             </div>
-            <EndLevelControl
-              endLevel={endLevel}
-              players={players}
-              isHost={isHost}
-              connected={connected}
-              onChange={(level) => gameActions().setEndLevel(level)}
-            />
-            {!isHost && host && (
-              <p className="text-center text-[13px] text-muted-foreground">Завершить игру может хост — {host.name}</p>
+            {isHost && (
+              <EndLevelControl
+                endLevel={endLevel}
+                players={players}
+                connected={connected}
+                onChange={(level) => gameActions().setEndLevel(level)}
+              />
             )}
 
             {journal}

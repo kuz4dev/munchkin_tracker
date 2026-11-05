@@ -65,7 +65,9 @@ describe('RoomPage in a game', () => {
     const { player } = await import('@/test/fixtures')
     await inRoom({ players: { p1: player('p1', 'Alice'), p2: player('p2', 'Bob') }, hostId: 'p2' })
     expect(screen.queryByRole('button', { name: 'Завершить игру' })).not.toBeInTheDocument()
-    expect(screen.getByText('Завершить игру может хост — Bob')).toBeInTheDocument()
+    expect(screen.queryByText(/Завершить игру может хост/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Игра до/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Игра до/)).not.toBeInTheDocument()
     expect(screen.getByText('Bob')).toBeInTheDocument()
   })
 
