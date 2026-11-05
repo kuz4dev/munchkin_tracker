@@ -157,8 +157,6 @@ interface TraitSelectProps<T extends string> {
 function TraitSelect<T extends string>({ label, hint, value, options, onChange }: TraitSelectProps<T>) {
   const [open, setOpen] = useState(false)
   const current = getLabel(options, value)
-  // "Без класса" goes last
-  const ordered = [...options.filter((o) => o.value !== 'none'), ...options.filter((o) => o.value === 'none')]
 
   function choose(next: T) {
     if (next !== value) onChange(next)
@@ -175,7 +173,7 @@ function TraitSelect<T extends string>({ label, hint, value, options, onChange }
       </SheetTrigger>
       <SheetContent title={label} description={hint}>
         <div role="radiogroup" aria-label={label} className="mt-5 grid grid-cols-2 gap-2.5">
-          {ordered.map((o) => {
+          {options.map((o) => {
             const checked = o.value === value
             return (
               <button

@@ -45,13 +45,13 @@ describe('StatsEditor', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('keeps "no class" last and does not resend the current value', async () => {
+  it('puts "no class" first and does not resend the current value', async () => {
     const onChange = vi.fn()
     render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: 'Класс: Без класса' }))
     const options = within(await screen.findByRole('dialog', { name: 'Класс' })).getAllByRole('radio')
-    expect(options.at(-1)).toHaveAccessibleName('Без класса')
-    await userEvent.click(options.at(-1)!)
+    expect(options[0]).toHaveAccessibleName('Без класса')
+    await userEvent.click(options[0]!)
     expect(onChange).not.toHaveBeenCalled()
   })
 })
