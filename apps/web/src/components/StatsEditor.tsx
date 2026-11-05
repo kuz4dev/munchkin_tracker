@@ -157,7 +157,7 @@ interface TraitSelectProps<T extends string> {
 function TraitSelect<T extends string>({ label, hint, value, options, onChange }: TraitSelectProps<T>) {
   const [open, setOpen] = useState(false)
   const current = getLabel(options, value)
-  // "Без класса" goes last, across the full row
+  // "Без класса" goes last
   const ordered = [...options.filter((o) => o.value !== 'none'), ...options.filter((o) => o.value === 'none')]
 
   function choose(next: T) {
@@ -187,9 +187,8 @@ function TraitSelect<T extends string>({ label, hint, value, options, onChange }
                 className={cn(
                   'flex h-16 min-w-0 items-center justify-between gap-2 rounded-[20px] pr-4 pl-[18px] text-left text-[17px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97]',
                   checked
-                    ? 'bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(180,70,31,0.3)]'
+                    ? 'border-2 border-primary bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(180,70,31,0.3)]'
                     : 'border-2 border-border bg-background',
-                  o.value === 'none' && 'col-span-2',
                 )}
               >
                 <span className="truncate">{o.label}</span>
