@@ -83,8 +83,8 @@ func queueOp(b *pgx.Batch, op Op) error {
 	switch op := op.(type) {
 	case CreateGame:
 		g := op.Game
-		b.Queue(`INSERT INTO games (id, code, status, created_at, last_activity_at) VALUES ($1, $2, $3, $4, $5)`,
-			g.ID, g.Code, g.Status, g.CreatedAt, g.LastActivityAt)
+		b.Queue(`INSERT INTO games (id, code, status, created_at, last_activity_at, end_level) VALUES ($1, $2, $3, $4, $5, $6)`,
+			g.ID, g.Code, g.Status, g.CreatedAt, g.LastActivityAt, g.EndLevel)
 	case AddSeat:
 		s := op.Seat
 		b.Queue(`INSERT INTO game_seats (id, game_id, session_hash, name, level, gear_bonus, gender, race, class, joined_at)
@@ -105,6 +105,8 @@ func queueOp(b *pgx.Batch, op Op) error {
 		queueTouch(b, e.GameID, e.CreatedAt)
 	case SetHost:
 		b.Queue(`UPDATE games SET host_seat_id = NULLIF($2, '')::uuid WHERE id = $1`, op.GameID, op.SeatID)
+	case SetEndLevel:
+		b.Queue(`UPDATE games SET end_level = $2 WHERE id = $1`, op.GameID, op.Level)
 	case FinishGame:
 		b.Queue(`UPDATE games SET status = 'finished', winner_seat_id = NULLIF($2, '')::uuid,
 				finished_at = $3, last_activity_at = $3
@@ -131,10 +133,10 @@ func queueTouch(b *pgx.Batch, gameID string, at time.Time) {
 func (p *Postgres) LoadActiveGame(ctx context.Context, code string, activeSince time.Time) (*LoadedGame, error) {
 	var g Game
 	err := p.pool.QueryRow(ctx,
-		`SELECT id::text, code, status, created_at, last_activity_at, COALESCE(host_seat_id::text, '')
+		`SELECT id::text, code, status, created_at, last_activity_at, COALESCE(host_seat_id::text, ''), end_level
 		FROM games WHERE code = $1 AND status = 'active'`,
 		code,
-	).Scan(&g.ID, &g.Code, &g.Status, &g.CreatedAt, &g.LastActivityAt, &g.HostSeatID)
+	).Scan(&g.ID, &g.Code, &g.Status, &g.CreatedAt, &g.LastActivityAt, &g.HostSeatID, &g.EndLevel)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

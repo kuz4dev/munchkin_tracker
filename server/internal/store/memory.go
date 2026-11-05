@@ -87,6 +87,10 @@ func (m *Memory) applyLocked(op Op) error {
 		if g := m.games[op.GameID]; g != nil {
 			g.HostSeatID = op.SeatID
 		}
+	case SetEndLevel:
+		if g := m.games[op.GameID]; g != nil {
+			g.EndLevel = op.Level
+		}
 	case FinishGame:
 		if g := m.games[op.GameID]; g != nil && g.Status == StatusActive {
 			g.Status = StatusFinished

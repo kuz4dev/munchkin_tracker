@@ -17,7 +17,7 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 	base := time.Now().Truncate(time.Millisecond).UTC()
 
 	newGame := func(code string, at time.Time) Game {
-		return Game{ID: uuid.NewString(), Code: code, Status: StatusActive, CreatedAt: at, LastActivityAt: at}
+		return Game{ID: uuid.NewString(), Code: code, Status: StatusActive, CreatedAt: at, LastActivityAt: at, EndLevel: models.DefaultEndLevel}
 	}
 	newSeat := func(g Game, name string, at time.Time) Seat {
 		return Seat{ID: uuid.NewString(), GameID: g.ID, SessionHash: "hash-" + name, Name: name, Stats: models.DefaultStats(), JoinedAt: at}
@@ -182,6 +182,19 @@ func testStore(t *testing.T, newStore func(t *testing.T) Store) {
 		mustApply(t, st, CreateGame{g}, AddSeat{s}, SetHost{GameID: g.ID, SeatID: s.ID}, SetHost{GameID: g.ID})
 		if loaded, _ := st.LoadActiveGame(ctx, "HOST01", time.Time{}); loaded == nil || loaded.Game.HostSeatID != "" {
 			t.Errorf("expected no host, got %+v", loaded)
+		}
+	})
+
+	t.Run("end level survives a reload", func(t *testing.T) {
+		st := newStore(t)
+		g := newGame("LEVEL1", base)
+		mustApply(t, st, CreateGame{g})
+		if loaded, _ := st.LoadActiveGame(ctx, "LEVEL1", time.Time{}); loaded == nil || loaded.Game.EndLevel != models.DefaultEndLevel {
+			t.Fatalf("expected the default end level, got %+v", loaded)
+		}
+		mustApply(t, st, SetEndLevel{GameID: g.ID, Level: 20})
+		if loaded, _ := st.LoadActiveGame(ctx, "LEVEL1", time.Time{}); loaded == nil || loaded.Game.EndLevel != 20 {
+			t.Errorf("expected end level 20, got %+v", loaded)
 		}
 	})
 

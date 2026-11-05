@@ -186,6 +186,8 @@ func (c *Client) handleMessage(data []byte) {
 		c.handleLeaveRoom()
 	case "finish_game":
 		c.handleFinishGame(msg)
+	case "set_end_level":
+		c.handleSetEndLevel(msg)
 	case "flee":
 		c.handleFlee()
 	case "die":
@@ -249,6 +251,16 @@ func (c *Client) handleFinishGame(msg models.IncomingMessage) {
 		return
 	}
 	if err := c.room.Finish(c, msg.WinnerID); err != nil {
+		c.sendError(err.Error())
+	}
+}
+
+func (c *Client) handleSetEndLevel(msg models.IncomingMessage) {
+	if c.room == nil {
+		c.sendError(room.ErrNotInRoom.Error())
+		return
+	}
+	if err := c.room.SetEndLevel(c, msg.EndLevel); err != nil {
 		c.sendError(err.Error())
 	}
 }

@@ -31,6 +31,7 @@ type Game struct {
 	FinishedAt     time.Time // zero unless finished
 	WinnerSeatID   string    // empty if finished without a winner
 	HostSeatID     string    // the player who may finish the game; empty if none
+	EndLevel       int       // the level that wins the game
 }
 
 // Seat is a player's place in a game with their current stats.
@@ -104,6 +105,12 @@ type SetHost struct {
 	SeatID string
 }
 
+// SetEndLevel changes the level that wins the game.
+type SetEndLevel struct {
+	GameID string
+	Level  int
+}
+
 type FinishGame struct {
 	GameID       string
 	WinnerSeatID string
@@ -144,6 +151,7 @@ func (UpdateSeatStats) isOp() {}
 func (RemoveSeat) isOp()      {}
 func (AppendEvent) isOp()     {}
 func (SetHost) isOp()         {}
+func (SetEndLevel) isOp()     {}
 func (FinishGame) isOp()      {}
 func (TouchGame) isOp()       {}
 func (CloseGame) isOp()       {}

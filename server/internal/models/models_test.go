@@ -34,7 +34,7 @@ func TestStatsValidate(t *testing.T) {
 		t.Errorf("default stats should be valid: %v", err)
 	}
 	s := DefaultStats()
-	s.Class = "bard"
+	s.Class = "necromancer"
 	if s.Validate() == nil {
 		t.Error("unknown class should be rejected")
 	}

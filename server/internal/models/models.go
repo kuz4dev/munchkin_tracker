@@ -8,17 +8,21 @@ import (
 )
 
 const (
-	MinLevel      = 1
-	MaxLevel      = 10
-	MinGearBonus  = 0
-	MaxGearBonus  = 999
-	MaxNameLength = 24
+	MinLevel = 1
+	// MaxLevel is the highest level any game allows; each game ends at its own
+	// end level, 10 unless the host changes it.
+	MaxLevel        = 50
+	DefaultEndLevel = 10
+	MinEndLevel     = 2
+	MinGearBonus    = 0
+	MaxGearBonus    = 999
+	MaxNameLength   = 24
 )
 
 var (
 	validGenders = map[string]bool{"male": true, "female": true}
-	validRaces   = map[string]bool{"human": true, "elf": true, "dwarf": true, "halfling": true}
-	validClasses = map[string]bool{"none": true, "warrior": true, "wizard": true, "thief": true, "cleric": true}
+	validRaces   = map[string]bool{"human": true, "elf": true, "dwarf": true, "halfling": true, "orc": true, "gnome": true}
+	validClasses = map[string]bool{"none": true, "warrior": true, "wizard": true, "thief": true, "cleric": true, "barbarian": true, "bard": true, "ranger": true}
 )
 
 // Stats are the player-editable fields. Clients may only change these.
@@ -146,6 +150,8 @@ type IncomingMessage struct {
 	WinnerID string `json:"winnerId,omitempty"`
 	// LoseLevel makes "die" reset the level as well as the gear.
 	LoseLevel bool `json:"loseLevel,omitempty"`
+	// EndLevel is the new final level for set_end_level.
+	EndLevel int `json:"endLevel,omitempty"`
 }
 
 type OutgoingMessage struct {
@@ -160,6 +166,7 @@ type OutgoingMessage struct {
 	Status         string            `json:"status,omitempty"`
 	WinnerID       string            `json:"winnerId,omitempty"`
 	HostID         string            `json:"hostId,omitempty"`
+	EndLevel       int               `json:"endLevel,omitempty"`
 	CreatedAt      int64             `json:"createdAt,omitempty"`
 	FinishedAt     int64             `json:"finishedAt,omitempty"`
 	Message        string            `json:"message,omitempty"`

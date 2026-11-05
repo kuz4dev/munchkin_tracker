@@ -43,6 +43,8 @@ var (
 	ErrRoomFull      = errors.New("room is full")
 	ErrUnknownWinner = errors.New("unknown winner")
 	ErrNotHost       = errors.New("only the host can finish the game")
+	ErrAboveEndLevel = errors.New("level is above the game's end level")
+	ErrBadEndLevel   = errors.New("end level out of range")
 )
 
 type Client interface {
@@ -84,6 +86,7 @@ type Room struct {
 	// hostID is the player who may finish the game: whoever joined first.
 	// It passes on only when the host leaves, not when they are offline.
 	hostID    string
+	endLevel  int
 	seats     map[string]*seat // player ID -> seat
 	bySession map[string]*seat // session hash -> seat
 	byClient  map[string]*seat // client ID -> seat
@@ -106,6 +109,7 @@ func NewRoom(code string, persist Persister) *Room {
 		CreatedAt: now,
 		persist:   persist,
 		status:    store.StatusActive,
+		endLevel:  models.DefaultEndLevel,
 		seats:     make(map[string]*seat),
 		bySession: make(map[string]*seat),
 		byClient:  make(map[string]*seat),
@@ -121,6 +125,9 @@ func RestoreRoom(g *store.LoadedGame, persist Persister) *Room {
 	r.ID = g.Game.ID
 	r.CreatedAt = g.Game.CreatedAt
 	r.nextSeq = g.LastSeq + 1
+	if g.Game.EndLevel > 0 {
+		r.endLevel = g.Game.EndLevel
+	}
 	for _, s := range g.Seats {
 		st := &seat{
 			player:      &models.Player{ID: s.ID, Name: s.Name, Stats: s.Stats},
@@ -149,6 +156,7 @@ func (r *Room) gameRecord() store.Game {
 		Status:         store.StatusActive,
 		CreatedAt:      r.CreatedAt,
 		LastActivityAt: r.CreatedAt,
+		EndLevel:       r.endLevel,
 	}
 }
 
@@ -371,6 +379,9 @@ func (r *Room) UpdateStats(c Client, stats models.Stats) error {
 	if r.status != store.StatusActive {
 		return ErrGameFinished
 	}
+	if stats.Level > r.endLevel {
+		return ErrAboveEndLevel
+	}
 	player := s.player
 
 	type change struct{ field, old, new string }
@@ -398,6 +409,42 @@ func (r *Room) UpdateStats(c Client, stats models.Stats) error {
 		r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
 	}
 	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: player})
+	return nil
+}
+
+// SetEndLevel changes the level that wins the game, for tables playing longer
+// or shorter games. It can't go below a level someone has already reached.
+func (r *Room) SetEndLevel(c Client, level int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	s := r.byClient[c.ID()]
+	if s == nil {
+		return ErrNotInRoom
+	}
+	if r.status != store.StatusActive {
+		return ErrGameFinished
+	}
+	if s.player.ID != r.hostID {
+		return ErrNotHost
+	}
+	if level < models.MinEndLevel || level > models.MaxLevel {
+		return ErrBadEndLevel
+	}
+	for _, other := range r.seats {
+		if other.player.Level > level {
+			return ErrBadEndLevel
+		}
+	}
+	if level == r.endLevel {
+		return nil
+	}
+	old := r.endLevel
+	r.endLevel = level
+	r.persist.Enqueue(store.SetEndLevel{GameID: r.ID, Level: level})
+	entry := r.appendEventLocked(s.player, "end_level", "", strconv.Itoa(old), strconv.Itoa(level))
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	r.broadcastLocked(models.OutgoingMessage{Type: "end_level_changed", EndLevel: level})
 	return nil
 }
 
@@ -542,6 +589,7 @@ func (r *Room) sendRoomStateLocked(c Client, self *seat, sessionID string) {
 		Status:    r.status,
 		WinnerID:  r.winnerID,
 		HostID:    r.hostID,
+		EndLevel:  r.endLevel,
 		CreatedAt: r.CreatedAt.UnixMilli(),
 	}
 	if !r.finishedAt.IsZero() {
