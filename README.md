@@ -1,60 +1,126 @@
-# Munchkin Tracker
+# Манчкин Трекер
 
-Real-time level tracker for the Munchkin board game: every player edits their own
-stats from their phone and the whole table sees changes instantly.
+Счётчик уровней для настольной игры «Манчкин». Каждый игрок ведёт своего персонажа со своего телефона, а весь стол сразу видит изменения. Больше никаких бумажек, жетонов и споров «а у тебя точно седьмой?».
 
-| Path | What |
+**Играть: [munchkin-tracker.pages.dev](https://munchkin-tracker.pages.dev)**. Регистрация не нужна, устанавливать приложение необязательно.
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="240" alt="Главный экран: кубик, приоткрытая дверь и монеты, поля для имени и кода комнаты">
+  <img src="docs/screenshots/room.png" width="240" alt="Комната: персонаж Алисы с уровнем и бонусами, ниже Боб и Вася за столом">
+  <img src="docs/screenshots/combat.png" width="240" alt="Бой: Алиса и Боб с силой 28 против противника с силой 22, плашка «Победа!»">
+</p>
+
+## Как играть
+
+1. Один игрок вводит имя и создаёт комнату.
+2. Остальные заходят по ссылке или шестизначному коду комнаты, каждый со своего телефона.
+3. Каждый сам меняет свой уровень, бонусы, пол, расу и класс. У всех за столом всё обновляется сразу.
+4. В бою считаете силу прямо в приложении, а если проиграли, бросаете кубик на смывку.
+5. Кто-то дошёл до 10 уровня? Хост получит предложение завершить игру, и все увидят итоги.
+
+## Возможности
+
+### За столом
+- **Обновления в реальном времени** у всех игроков, до 12 человек в комнате.
+- **Приглашение одной кнопкой**: ссылка через системное меню «Поделиться» или просто код комнаты.
+- **Хост**: завершает игру тот, кто создал комнату. Если он вышел, роль сама переходит другому игроку.
+- **Журнал партии**: все ходы с временем, чтобы разбираться в спорах.
+
+### Бой, смывка и смерть
+- **Калькулятор боя**: игрок, союзник, сила противника и разовые карты с обеих сторон. По правилам ничья засчитывается монстру.
+- **Смывка**: кубик бросает сервер, поэтому результат честный и один на всех. Удаётся на 5 или 6.
+- **Смерть**: теряются вещи или вещи вместе с уровнем, если у вас за столом так принято.
+- **Плашка за столом**: остальные сразу видят, кто смывается и что выпало.
+
+### На телефоне
+- **Установка на экран** без магазина приложений: это PWA.
+- **Экран не гаснет** во время партии.
+- **Партия не теряется**: если телефон уснул или пропала связь, приложение само вернёт вас на ваше место, а прогресс хранится на сервере.
+- **Тёплый дизайн с анимацией**: кубик на главном экране можно бросить тапом. Если в системе включено уменьшение движения, анимация отключается.
+
+## Скриншоты
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/select.png" width="240" alt="Шторка выбора расы с крупными плитками"><br>Выбор расы</td>
+    <td align="center"><img src="docs/screenshots/flee.png" width="240" alt="Неудачная смывка: на кубике единица, кнопки «Погибнуть» и «Бросить ещё раз»"><br>Смывка</td>
+    <td align="center"><img src="docs/screenshots/death.png" width="240" alt="Подтверждение смерти с надгробием и выбором, что потерять"><br>Смерть</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/table.png" width="240" alt="Плашка «Боб смывается» и открытый журнал партии"><br>Плашка и журнал партии</td>
+    <td align="center"><img src="docs/screenshots/finish.png" width="240" alt="Предложение завершить игру: Боб достиг 10 уровня"><br>Кто-то дошёл до 10 уровня</td>
+    <td align="center"><img src="docs/screenshots/summary.png" width="240" alt="Итоги игры с короной и таблицей мест"><br>Итоги партии</td>
+  </tr>
+</table>
+
+## Для разработчиков
+
+| Путь | Что там |
 |---|---|
-| `server/` | Go game server: WebSocket rooms, Postgres persistence |
-| `packages/core/` | Platform-independent game logic (protocol, store, connection) |
-| `apps/web/` | React web app (Vite, Tailwind, shadcn/ui), installable as a PWA |
+| `server/` | Игровой сервер на Go: комнаты на WebSocket, хранение в Postgres |
+| `packages/core/` | Логика игры без привязки к платформе: протокол, состояние, соединение |
+| `apps/web/` | Веб-приложение на React (Vite, Tailwind, shadcn/ui), устанавливается как PWA |
 
-## Development
+Идеи и планы лежат в [todo.md](todo.md).
 
-Requirements: Node 22, Go 1.25+, Docker.
+### Запуск
+
+Нужны Node 22, Go 1.25+ и Docker.
 
 ```sh
-npm install                 # workspaces: packages/core and apps/web
-docker compose up -d db     # Postgres on localhost:5433
+npm install                 # воркспейсы packages/core и apps/web
+docker compose up -d db     # Postgres на localhost:5433
 ```
 
-Game server:
+Игровой сервер (без `DATABASE_URL` игры хранятся только в памяти):
 
 ```sh
 cd server && DATABASE_URL=postgres://munchkin:munchkin@localhost:5433/munchkin go run ./cmd/server
 ```
 
-Web app on http://localhost:5173 (proxies `/api` and `/ws` to the server):
+Веб-приложение на http://localhost:5173 (проксирует `/api` и `/ws` на сервер):
 
 ```sh
 npm run dev
 ```
 
-Production builds talk to the server at `VITE_API_URL` (same origin if unset).
+Рабочая сборка обращается к серверу по адресу `VITE_API_URL` (если он не задан, то к своему же домену). Проверить её локально, вместе с service worker и CSP:
 
-The web app is a PWA: it can be installed to the home screen, keeps the screen
-on during a game and offers a reload when a new version is deployed. Icons are
-generated from `apps/web/public/icon.svg`:
+```sh
+npm run build && npm run preview -w @munchkin/web
+```
+
+Иконки генерируются из `apps/web/public/icon.svg`:
 
 ```sh
 cd apps/web && npx pwa-assets-generator
 ```
 
-Test the production build (service worker, CSP) with `npm run build && npm run preview -w @munchkin/web`.
-
-## Tests
+### Тесты
 
 ```sh
-npm test                                   # core and web
+npm test                                   # core и web
 npm run typecheck && npm run lint && npm run build
-cd server && go test ./...                 # server (set TEST_DATABASE_URL for Postgres tests)
+cd server && go test ./...                 # сервер (для тестов на Postgres задайте TEST_DATABASE_URL)
 ```
 
-## Analytics
+### Деплой
 
-No cookies and no personal data, so no consent banner is needed.
+- **Фронтенд**: Cloudflare Pages, пересобирается при каждом пуше в `main`.
+- **Сервер**: Render, настройки в [render.yaml](render.yaml). Деплоит GitHub Actions после зелёных тестов.
+- **База**: Neon (Postgres).
 
-- **Traffic** (visitors, countries, devices, referrers): Cloudflare Web Analytics, enabled in the Pages project (Metrics → Web Analytics). Cloudflare injects its script; the CSP allows it.
-- **Game funnel**: run `SELECT * FROM daily_stats LIMIT 30;` in the Neon SQL editor. One row per day (UTC): visits and launches of the installed app, rooms created, rooms where friends joined, finished games, players, median game length, invites shared, install clicks and confirmed installs.
+Бесплатный сервер засыпает, когда никто не играет, поэтому первый вход занимает до минуты. На это время приложение показывает подсказку «Будим сервер…».
 
-The app sends the counters with `track()` (`apps/web/src/lib/metrics.ts`) to `POST /api/metrics`. The server accepts only known event names, counts them in memory and writes per-day totals to `app_metrics` once a minute.
+### Аналитика
+
+Без cookie и персональных данных, поэтому баннер о согласии не нужен.
+
+- **Трафик** (посетители, страны, устройства, источники): Cloudflare Web Analytics, включается в проекте Pages (Metrics → Web Analytics). Скрипт подставляет сам Cloudflare, CSP его разрешает.
+- **Воронка игры**: выполните `SELECT * FROM daily_stats LIMIT 30;` в SQL-редакторе Neon. По строке на день (UTC): визиты и запуски установленного приложения, созданные комнаты, комнаты с друзьями, законченные партии, игроки, медианная длительность партии, приглашения, нажатия на установку и подтверждённые установки.
+
+Приложение отправляет счётчики функцией `track()` (`apps/web/src/lib/metrics.ts`) на `POST /api/metrics`. Сервер принимает только известные названия событий, считает их в памяти и раз в минуту пишет итоги за день в таблицу `app_metrics`.
+
+---
+
+Неофициальный фанатский проект, не связан с издателями игры. «Манчкин» (Munchkin) — торговая марка Steve Jackson Games.
