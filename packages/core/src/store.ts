@@ -298,6 +298,10 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
             gender: updated.gender,
             race: updated.race,
             class: updated.class,
+            halfBreed: updated.halfBreed,
+            race2: updated.race2,
+            superMunchkin: updated.superMunchkin,
+            class2: updated.class2,
           },
         })
       },

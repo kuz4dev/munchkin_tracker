@@ -7,6 +7,12 @@ export interface PlayerStats {
   gender: 'male' | 'female'
   race: 'human' | 'elf' | 'dwarf' | 'halfling' | 'orc' | 'gnome'
   class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric' | 'barbarian' | 'bard' | 'ranger'
+  /** The Half-Breed card allows a second race; it also works with just one */
+  halfBreed?: boolean
+  race2?: PlayerStats['race'] | ''
+  /** The Super Munchkin card allows a second class; it also works with just one */
+  superMunchkin?: boolean
+  class2?: PlayerStats['class'] | ''
 }
 
 export interface Player extends PlayerStats {

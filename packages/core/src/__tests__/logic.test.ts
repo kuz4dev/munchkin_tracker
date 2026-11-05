@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { describeEntry, describeGroup, groupChangelog } from '../changelog'
 import { formatBonus, resolveCombat } from '../combat'
 import { formatDuration, formatTime } from '../format'
-import { clampGearBonus, clampLevel, getLabel, normalizeRoomCode, RACES } from '../game'
+import { clampGearBonus, classLabel, clampLevel, getLabel, normalizeRoomCode, raceLabel, RACES } from '../game'
 import type { ChangeLogEntry } from '../protocol'
 import { byLevelThenName, rankPlayers } from '../standings'
 import { player } from './fakes'
@@ -118,5 +118,23 @@ describe('flee and death in the journal', () => {
     expect(line({ eventType: 'die', oldValue: '7/5', newValue: '1/0' })).toBe('Igor: смерть, уровень 7 → 1, бонусы 5 → 0')
     expect(line({ eventType: 'die', oldValue: '7/5', newValue: '7/0' })).toBe('Igor: смерть, бонусы 5 → 0')
     expect(line({ eventType: 'die', oldValue: '1/0', newValue: '1/0' })).toBe('Igor: смерть')
+  })
+})
+
+describe('second race and class', () => {
+  const line = (o: Partial<ChangeLogEntry>) => describeGroup(groupChangelog([e(o)])[0]!)
+
+  it('reads well in the journal', () => {
+    expect(line({ field: 'race', oldValue: 'elf', newValue: 'elf+orc' })).toBe('Igor: раса Эльф → Эльф + Орк (полукровка)')
+    expect(line({ field: 'class', oldValue: 'wizard', newValue: 'wizard+bard' })).toBe('Igor: класс Волшебник → Волшебник + Бард (суперманчкин)')
+    expect(line({ field: 'race', oldValue: 'elf+orc', newValue: 'elf' })).toBe('Igor: раса Эльф + Орк → Эльф')
+    expect(line({ field: 'halfBreed', oldValue: 'no', newValue: 'yes' })).toBe('Igor: полукровка нет → да')
+  })
+
+  it('labels one or two', () => {
+    expect(raceLabel({ race: 'elf' })).toBe('Эльф')
+    expect(raceLabel({ race: 'elf', race2: 'orc' })).toBe('Эльф + Орк')
+    expect(classLabel({ class: 'wizard', class2: '' })).toBe('Волшебник')
+    expect(classLabel({ class: 'wizard', class2: 'bard' })).toBe('Волшебник + Бард')
   })
 })

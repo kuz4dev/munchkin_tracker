@@ -47,10 +47,22 @@ export const FIELD_LABELS: Record<string, string> = {
   gender: 'пол',
   race: 'раса',
   class: 'класс',
+  halfBreed: 'полукровка',
+  superMunchkin: 'суперманчкин',
 }
 
 export function getLabel(list: readonly { value: string; label: string }[], value: string): string {
   return list.find((item) => item.value === value)?.label ?? value
+}
+
+/** "Эльф" or "Эльф + Орк" */
+export function raceLabel(p: Pick<Player, 'race' | 'race2'>): string {
+  return [p.race, p.race2].filter(Boolean).map((r) => getLabel(RACES, r!)).join(' + ')
+}
+
+/** "Волшебник" or "Волшебник + Бард" */
+export function classLabel(p: Pick<Player, 'class' | 'class2'>): string {
+  return [p.class, p.class2].filter(Boolean).map((c) => getLabel(CLASSES, c!)).join(' + ')
 }
 
 export function power(p: Pick<Player, 'level' | 'gearBonus'>): number {

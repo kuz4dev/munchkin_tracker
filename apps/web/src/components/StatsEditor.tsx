@@ -1,5 +1,6 @@
 import {
   CLASSES,
+  classLabel,
   clampGearBonus,
   clampLevel,
   DEFAULT_END_LEVEL,
@@ -10,6 +11,7 @@ import {
   MIN_LEVEL,
   power,
   RACES,
+  raceLabel,
   type Option,
   type Player,
   type PlayerStats,
@@ -19,6 +21,8 @@ import { Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { CheckDot, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Switch } from 'radix-ui'
+import type { ReactNode } from 'react'
 import { plural } from '@/lib/plural'
 
 interface StatsEditorProps {
@@ -43,8 +47,14 @@ export function StatsEditor({ player, isHost, endLevel = DEFAULT_END_LEVEL, onCh
             <p className="text-[13px] font-bold">Ваш персонаж{isHost && ' · хост'}</p>
             <h2 className="mt-1.5 truncate font-display text-[28px] leading-tight font-extrabold">{player.name}</h2>
             <p className="mt-1 text-sm">
-              {getLabel(RACES, player.race)} · {getLabel(CLASSES, player.class)}
+              {raceLabel(player)} · {classLabel(player)}
             </p>
+            {(player.halfBreed || player.superMunchkin) && (
+              <p className="mt-2.5 flex flex-wrap gap-1.5">
+                {player.halfBreed && <CardBadge>Полукровка</CardBadge>}
+                {player.superMunchkin && <CardBadge>Суперманчкин</CardBadge>}
+              </p>
+            )}
           </div>
           <div className="shrink-0 text-right">
             <p
@@ -96,8 +106,29 @@ export function StatsEditor({ player, isHost, endLevel = DEFAULT_END_LEVEL, onCh
 
       <div className="grid grid-cols-3 gap-2">
         <TraitSelect label="Пол" hint="Пол вашего персонажа" value={player.gender} options={GENDERS} onChange={(gender) => onChange({ gender })} />
-        <TraitSelect label="Раса" hint="Карта расы, что сейчас перед вами" value={player.race} options={RACES} onChange={(race) => onChange({ race })} />
-        <TraitSelect label="Класс" hint="Нет карты класса — выберите «Без класса»" value={player.class} options={CLASSES} onChange={(cls) => onChange({ class: cls })} />
+        <DoubleTraitSheet
+          label="Раса"
+          hint="Карта расы, что сейчас перед вами"
+          card="Полукровка"
+          cardHint="две расы"
+          options={RACES}
+          first={player.race}
+          second={player.race2 ?? ''}
+          cardOn={!!player.halfBreed}
+          onChange={(race, race2, halfBreed) => onChange({ race, race2, halfBreed })}
+        />
+        <DoubleTraitSheet
+          label="Класс"
+          hint="Нет карты класса — выберите «Без класса»"
+          card="Суперманчкин"
+          cardHint="два класса"
+          options={CLASSES}
+          first={player.class}
+          second={player.class2 ?? ''}
+          cardOn={!!player.superMunchkin}
+          empty="none"
+          onChange={(cls, class2, superMunchkin) => onChange({ class: cls, class2, superMunchkin })}
+        />
       </div>
     </div>
   )
@@ -153,6 +184,19 @@ interface TraitSelectProps<T extends string> {
   onChange: (value: T) => void
 }
 
+function CardBadge({ children }: { children: ReactNode }) {
+  return <span className="inline-flex h-7 items-center rounded-full bg-mustard px-2.5 text-xs font-bold text-cocoa">{children}</span>
+}
+
+const pillClass =
+  'h-12 w-full min-w-0 overflow-hidden rounded-full border-2 border-border bg-card px-1.5 font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-95'
+
+const tileClass = (checked: boolean) =>
+  cn(
+    'flex h-16 min-w-0 items-center justify-between gap-2 rounded-[20px] border-2 pr-4 pl-[18px] text-left text-[17px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97]',
+    checked ? 'border-primary bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(180,70,31,0.3)]' : 'border-border bg-background',
+  )
+
 /** A pill showing the current trait; tapping it opens a sheet of large tiles. */
 function TraitSelect<T extends string>({ label, hint, value, options, onChange }: TraitSelectProps<T>) {
   const [open, setOpen] = useState(false)
@@ -165,37 +209,179 @@ function TraitSelect<T extends string>({ label, hint, value, options, onChange }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        aria-label={`${label}: ${current}`}
-        className="h-11 w-full min-w-0 truncate rounded-full border-2 border-border bg-card px-2 text-[15px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-95"
-      >
+      <SheetTrigger aria-label={`${label}: ${current}`} className={cn(pillClass, 'truncate text-[15px]')}>
         {current}
       </SheetTrigger>
       <SheetContent title={label} description={hint}>
-        <div role="radiogroup" aria-label={label} className="mt-5 grid grid-cols-2 gap-2.5">
-          {options.map((o) => {
-            const checked = o.value === value
-            return (
-              <button
-                key={o.value}
-                type="button"
-                role="radio"
-                aria-checked={checked}
-                onClick={() => choose(o.value)}
-                className={cn(
-                  'flex h-16 min-w-0 items-center justify-between gap-2 rounded-[20px] pr-4 pl-[18px] text-left text-[17px] font-bold transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97]',
-                  checked
-                    ? 'border-2 border-primary bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(180,70,31,0.3)]'
-                    : 'border-2 border-border bg-background',
-                )}
-              >
-                <span className="truncate">{o.label}</span>
-                <CheckDot checked={checked} tone="mustard" />
-              </button>
-            )
-          })}
-        </div>
+        <SingleTiles label={label} options={options} value={value} onChoose={choose} />
       </SheetContent>
     </Sheet>
+  )
+}
+
+function SingleTiles<T extends string>({ label, options, value, onChoose }: { label: string; options: readonly Option<T>[]; value: T; onChoose: (value: T) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="mt-4 grid grid-cols-2 gap-2.5">
+      {options.map((o) => {
+        const checked = o.value === value
+        return (
+          <button key={o.value} type="button" role="radio" aria-checked={checked} onClick={() => onChoose(o.value)} className={tileClass(checked)}>
+            <span className="truncate">{o.label}</span>
+            <CheckDot checked={checked} tone="mustard" />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+interface DoubleTraitSheetProps<T extends string> {
+  label: string
+  hint: string
+  /** The card that allows a second choice */
+  card: string
+  cardHint: string
+  options: readonly Option<T>[]
+  first: T
+  second: T | ''
+  cardOn: boolean
+  /** The "nothing" option, which can't be combined with another one */
+  empty?: T
+  onChange: (first: T, second: T | '', cardOn: boolean) => void
+}
+
+/** Like TraitSelect, with a switch for the card that allows a second race or class. */
+function DoubleTraitSheet<T extends string>({ label, hint, card, cardHint, options, first, second, cardOn, empty, onChange }: DoubleTraitSheetProps<T>) {
+  const [open, setOpen] = useState(false)
+  const names = [first, second].filter(Boolean).map((v) => getLabel(options, v))
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger aria-label={`${label}: ${names.join(' + ')}`} className={pillClass}>
+        {names.length === 1 ? (
+          <span className="block truncate text-[15px]">{names[0]}</span>
+        ) : (
+          <span className="block truncate text-[13px] leading-4">
+            {names[0]}
+            <br />+ {names[1]}
+          </span>
+        )}
+      </SheetTrigger>
+      {/* Its state lives in the content, so every open starts from what is saved */}
+      <DoubleTraitContent
+        {...{ label, hint, card, cardHint, options, first, second, cardOn, empty, onChange }}
+        onClose={() => setOpen(false)}
+      />
+    </Sheet>
+  )
+}
+
+function DoubleTraitContent<T extends string>({
+  label,
+  hint,
+  card,
+  cardHint,
+  options,
+  first,
+  second,
+  cardOn,
+  empty,
+  onChange,
+  onClose,
+}: DoubleTraitSheetProps<T> & { onClose: () => void }) {
+  const [on, setOn] = useState(cardOn)
+  const [picked, setPicked] = useState<readonly T[]>(second ? [first, second] : [first])
+  const real = picked.filter((v) => v !== empty)
+  const full = real.length === 2
+
+  function save(nextFirst: T, nextSecond: T | '', nextOn: boolean) {
+    if (nextFirst !== first || nextSecond !== second || nextOn !== cardOn) onChange(nextFirst, nextSecond, nextOn)
+  }
+
+  function chooseSingle(value: T) {
+    save(value, '', false)
+    onClose()
+  }
+
+  function toggleCard(next: boolean) {
+    const kept = picked[0]!
+    setOn(next)
+    setPicked([kept])
+    // Turning a saved card off takes effect at once: without it there is no "Done"
+    if (!next && cardOn) save(kept, '', false)
+  }
+
+  function toggle(value: T) {
+    if (value === empty) return setPicked([value])
+    if (picked.includes(value)) {
+      const rest = picked.filter((v) => v !== value)
+      // A race can't be empty; a class falls back to "no class"
+      if (rest.length > 0) setPicked(rest)
+      else if (empty) setPicked([empty])
+      return
+    }
+    if (!full) setPicked([...real, value])
+  }
+
+  const countHint = full ? `Выбрано 2 из 2. ${label === 'Раса' ? 'Снимите одну, чтобы взять другую' : 'Снимите один, чтобы взять другой'}` : real.length === 1 ? 'Выбран 1 из 2' : hint
+
+  return (
+    <SheetContent title={label} description={on ? countHint : hint}>
+      <div className={cn('mt-3.5 flex items-center gap-3 rounded-[20px] border-2 py-2.5 pr-3 pl-4', on ? 'border-primary bg-[#fff1e6]' : 'border-border bg-background')}>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold">{card}</p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">Есть такая карта? Можно {cardHint}</p>
+        </div>
+        <Switch.Root
+          checked={on}
+          onCheckedChange={toggleCard}
+          aria-label={card}
+          className={cn(
+            'relative h-8 w-14 shrink-0 rounded-full transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            on ? 'bg-primary' : 'bg-[#a0806f]',
+          )}
+        >
+          <Switch.Thumb className={cn('block size-[26px] translate-x-[3px] rounded-full bg-card transition-transform', on && 'translate-x-[27px]')} />
+        </Switch.Root>
+      </div>
+
+      {!on ? (
+        <SingleTiles label={label} options={options} value={first} onChoose={chooseSingle} />
+      ) : (
+        <>
+          <div role="group" aria-label={label} className="mt-3 grid grid-cols-2 gap-2">
+            {options.map((o) => {
+              const checked = picked.includes(o.value)
+              const locked = !checked && full && o.value !== empty
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  disabled={locked}
+                  onClick={() => toggle(o.value)}
+                  className={cn(tileClass(checked), 'h-[60px]', locked && 'border-dashed bg-transparent font-bold text-muted-foreground')}
+                >
+                  <span className="truncate">{o.label}</span>
+                  {!locked && <CheckDot checked={checked} tone="mustard" />}
+                </button>
+              )
+            })}
+          </div>
+          {real.length === 1 && <p className="mt-3 text-center text-[13px] text-muted-foreground">Можно оставить и {label === 'Раса' ? 'одну' : 'один'}: по правилам это тоже считается</p>}
+          <button
+            type="button"
+            onClick={() => {
+              save(picked[0]!, picked[1] ?? '', true)
+              onClose()
+            }}
+            className="mt-3.5 h-14 w-full rounded-[18px] bg-primary font-display text-[15px] font-semibold text-primary-foreground transition-transform outline-none hover:bg-terracotta-deep focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"
+          >
+            Готово
+          </button>
+        </>
+      )}
+    </SheetContent>
   )
 }

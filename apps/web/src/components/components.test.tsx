@@ -41,7 +41,7 @@ describe('StatsEditor', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Раса' })
     expect(within(sheet).getByRole('radio', { name: 'Человек' })).toBeChecked()
     await userEvent.click(within(sheet).getByRole('radio', { name: 'Эльф' }))
-    expect(onChange).toHaveBeenCalledWith({ race: 'elf' })
+    expect(onChange).toHaveBeenCalledWith({ race: 'elf', race2: '', halfBreed: false })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -213,10 +213,68 @@ describe('StatsEditor, end level and expansions', () => {
     render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: 'Раса: Человек' }))
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Раса' })).getByRole('radio', { name: 'Орк' }))
-    expect(onChange).toHaveBeenCalledWith({ race: 'orc' })
+    expect(onChange).toHaveBeenCalledWith({ race: 'orc', race2: '', halfBreed: false })
     await userEvent.click(screen.getByRole('button', { name: 'Класс: Без класса' }))
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Класс' })).getByRole('radio', { name: 'Рейнджер' }))
-    expect(onChange).toHaveBeenCalledWith({ class: 'ranger' })
+    expect(onChange).toHaveBeenCalledWith({ class: 'ranger', class2: '', superMunchkin: false })
+  })
+})
+
+describe('StatsEditor, Half-Breed and Super Munchkin', () => {
+  it('saves two races only on Done, and shows them', async () => {
+    const onChange = vi.fn()
+    const me = player('p1', 'Alice', { race: 'elf' })
+    const { rerender } = render(<StatsEditor player={me} isHost={false} onChange={onChange} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    expect(onChange).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Орк' }))
+    expect(screen.getByRole('checkbox', { name: 'Гном' })).toBeDisabled()
+    expect(onChange).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(onChange).toHaveBeenCalledWith({ race: 'elf', race2: 'orc', halfBreed: true })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    rerender(<StatsEditor player={{ ...me, race2: 'orc', halfBreed: true }} isHost={false} onChange={onChange} />)
+    expect(screen.getByRole('button', { name: 'Раса: Эльф + Орк' })).toBeInTheDocument()
+    expect(screen.getByText('Эльф + Орк · Без класса')).toBeInTheDocument()
+    expect(screen.getByText('Полукровка')).toBeInTheDocument()
+  })
+
+  it('closing without Done changes nothing', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Человек' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('the card works with one race, and turning it off keeps the first race at once', async () => {
+    const onChange = vi.fn()
+    const me = player('p1', 'Alice', { race: 'elf', race2: 'orc', halfBreed: true })
+    render(<StatsEditor player={me} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф + Орк' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Орк' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(onChange).toHaveBeenLastCalledWith({ race: 'elf', race2: '', halfBreed: true })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф + Орк' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    expect(onChange).toHaveBeenLastCalledWith({ race: 'elf', race2: '', halfBreed: false })
+  })
+
+  it('"no class" can\'t be combined: it replaces the classes and gives way to a real one', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice', { class: 'wizard', class2: 'bard', superMunchkin: true })} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Класс: Волшебник + Бард' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Без класса' }))
+    expect(screen.getByRole('checkbox', { name: 'Волшебник' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Воин' }))
+    expect(screen.getByRole('checkbox', { name: 'Без класса' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(onChange).toHaveBeenCalledWith({ class: 'warrior', class2: '', superMunchkin: true })
   })
 })
 

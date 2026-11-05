@@ -57,9 +57,12 @@ export function formatFieldValue(field: string | undefined, value: string | unde
     case 'gender':
       return getLabel(GENDERS, value)
     case 'race':
-      return getLabel(RACES, value)
+      return value.split('+').map((r) => getLabel(RACES, r)).join(' + ')
     case 'class':
-      return getLabel(CLASSES, value)
+      return value.split('+').map((c) => getLabel(CLASSES, c)).join(' + ')
+    case 'halfBreed':
+    case 'superMunchkin':
+      return value === 'yes' ? 'да' : 'нет'
     default:
       return value
   }
@@ -97,7 +100,8 @@ export function describeGroup(group: ChangeLogGroup): string {
       return describeDeath(name, group.firstOldValue, group.lastNewValue)
     case 'stat_change': {
       const fieldLabel = FIELD_LABELS[group.field ?? ''] ?? group.field
-      return `${name}: ${fieldLabel} ${formatFieldValue(group.field, group.firstOldValue)} → ${formatFieldValue(group.field, group.lastNewValue)}`
+      const card = group.lastNewValue?.includes('+') ? (group.field === 'race' ? ' (полукровка)' : ' (суперманчкин)') : ''
+      return `${name}: ${fieldLabel} ${formatFieldValue(group.field, group.firstOldValue)} → ${formatFieldValue(group.field, group.lastNewValue)}${card}`
     }
   }
 }

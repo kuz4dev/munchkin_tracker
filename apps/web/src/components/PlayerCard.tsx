@@ -1,4 +1,4 @@
-import { CLASSES, DEFAULT_END_LEVEL, getLabel, power, RACES, type Player } from '@munchkin/core'
+import { classLabel, DEFAULT_END_LEVEL, power, raceLabel, type Player } from '@munchkin/core'
 
 interface PlayerCardProps {
   player: Player
@@ -28,9 +28,15 @@ export function PlayerCard({ player, isHost = false, endLevel = DEFAULT_END_LEVE
           {isHost && <span className="text-xs font-semibold text-muted-foreground"> · хост</span>}
         </h3>
         <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-          {online ? `${getLabel(RACES, player.race)} · ${getLabel(CLASSES, player.class)}` : 'не в сети'} · ур.{' '}
+          {online ? `${raceLabel(player)} · ${classLabel(player)}` : 'не в сети'} · ур.{' '}
           {player.level} · бонусы {player.gearBonus}
         </p>
+        {(player.halfBreed || player.superMunchkin) && (
+          <p className="mt-1.5 flex flex-wrap gap-1 text-[11px] font-bold">
+            {player.halfBreed && <span className="rounded-full bg-secondary px-2 py-0.5">Полукровка</span>}
+            {player.superMunchkin && <span className="rounded-full bg-secondary px-2 py-0.5">Суперманчкин</span>}
+          </p>
+        )}
         <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${online ? 'bg-secondary' : 'bg-border'}`} aria-hidden="true">
           <div
             className={`h-full rounded-full transition-[width] duration-500 ${online ? 'bg-primary' : 'bg-muted-foreground/50'}`}

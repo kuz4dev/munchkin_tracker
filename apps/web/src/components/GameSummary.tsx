@@ -1,4 +1,4 @@
-import { CLASSES, formatDuration, getLabel, power, RACES, rankPlayers, type Player } from '@munchkin/core'
+import { classLabel, formatDuration, power, raceLabel, rankPlayers, type Player } from '@munchkin/core'
 import { Crown } from 'lucide-react'
 import { CrownArt, FlagArt } from '@/components/art'
 import { Button } from '@/components/ui/button'
@@ -52,7 +52,7 @@ export function GameSummary({ players, playerId, winnerId, createdAt, finishedAt
                   {p.id === playerId && <span className="text-xs font-semibold text-muted-foreground"> (вы)</span>}
                 </p>
                 <p className="text-[13px] text-muted-foreground">
-                  {getLabel(RACES, p.race)} · {getLabel(CLASSES, p.class)}
+                  {raceLabel(p)} · {classLabel(p)}
                 </p>
               </div>
               <div className="text-right tabular-nums">
