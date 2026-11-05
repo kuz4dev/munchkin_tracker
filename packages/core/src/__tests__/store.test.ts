@@ -212,6 +212,23 @@ describe('messages', () => {
   })
 })
 
+describe('end level', () => {
+  it('comes with the room, follows changes, and the host asks to change it', async () => {
+    const { connection, s } = setup()
+    await s().createRoom('Alice')
+    expect(s().endLevel).toBe(10)
+
+    connection.emit(roomState({ endLevel: 15 }))
+    expect(s().endLevel).toBe(15)
+    connection.emit({ type: 'end_level_changed', endLevel: 20 })
+    expect(s().endLevel).toBe(20)
+
+    s().setEndLevel(30)
+    expect(connection.sent.at(-1)).toEqual({ type: 'set_end_level', endLevel: 30 })
+    expect(s().endLevel).toBe(20) // until the server confirms
+  })
+})
+
 describe('flee and death', () => {
   it('flee only asks the server: it rolls the die', async () => {
     const { connection, s } = setup()

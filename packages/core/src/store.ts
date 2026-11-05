@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { ApiError, type Api } from './api'
 import type { Connection, ConnectionStatus } from './connection'
-import { MIN_GEAR_BONUS, MIN_LEVEL, normalizeRoomCode } from './game'
+import { DEFAULT_END_LEVEL, MIN_GEAR_BONUS, MIN_LEVEL, normalizeRoomCode } from './game'
 import { ServerErrors, type ChangeLogEntry, type GameStatus, type Player, type PlayerStats, type ServerMessage } from './protocol'
 import type { SessionStorage } from './session'
 
@@ -30,6 +30,8 @@ export interface GameState {
   status: GameStatus
   winnerId: string
   hostId: string
+  /** The level that wins the game */
+  endLevel: number
   /** Unix ms */
   createdAt: number
   finishedAt: number
@@ -48,6 +50,8 @@ export interface GameActions {
   updateStats(stats: Partial<PlayerStats>): void
   /** Ends the game for everyone (host only). Omit winnerId for no winner. */
   finishGame(winnerId?: string): void
+  /** The host changes the level that wins the game. */
+  setEndLevel(level: number): void
   /** Asks the server to roll for running away; the result arrives as a 'flee' journal entry. */
   flee(): void
   /** Our character dies: gear is lost, and the level too with loseLevel. */
@@ -75,6 +79,7 @@ const emptyRoom = {
   status: 'active',
   winnerId: '',
   hostId: '',
+  endLevel: DEFAULT_END_LEVEL,
   createdAt: 0,
   finishedAt: 0,
   loadingOlder: false,
@@ -153,6 +158,7 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
             status: msg.status,
             winnerId: msg.winnerId ?? '',
             hostId: msg.hostId ?? '',
+            endLevel: msg.endLevel ?? DEFAULT_END_LEVEL,
             createdAt: msg.createdAt,
             finishedAt: msg.finishedAt ?? 0,
           })
@@ -183,6 +189,9 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
           break
         case 'host_changed':
           set({ hostId: msg.hostId ?? '' })
+          break
+        case 'end_level_changed':
+          set({ endLevel: msg.endLevel })
           break
         case 'game_finished':
           set({ status: msg.status, winnerId: msg.winnerId ?? '', finishedAt: msg.finishedAt })
@@ -295,6 +304,10 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
 
       finishGame(winnerId) {
         connection.send({ type: 'finish_game', winnerId: winnerId || undefined })
+      },
+
+      setEndLevel(level) {
+        connection.send({ type: 'set_end_level', endLevel: level })
       },
 
       flee() {

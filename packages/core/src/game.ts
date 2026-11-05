@@ -2,7 +2,10 @@ import type { Player, PlayerStats } from './protocol'
 
 // Keep in sync with server/internal/models/models.go
 export const MIN_LEVEL = 1
-export const MAX_LEVEL = 10
+/** The level that wins a game unless the host changes it */
+export const DEFAULT_END_LEVEL = 10
+export const MIN_END_LEVEL = 2
+export const MAX_END_LEVEL = 50
 export const MIN_GEAR_BONUS = 0
 export const MAX_GEAR_BONUS = 999
 export const MAX_NAME_LENGTH = 24
@@ -18,6 +21,8 @@ export const RACES: Option<PlayerStats['race']>[] = [
   { value: 'elf', label: 'Эльф' },
   { value: 'dwarf', label: 'Дварф' },
   { value: 'halfling', label: 'Хафлинг' },
+  { value: 'orc', label: 'Орк' },
+  { value: 'gnome', label: 'Гном' },
 ]
 
 export const CLASSES: Option<PlayerStats['class']>[] = [
@@ -26,6 +31,9 @@ export const CLASSES: Option<PlayerStats['class']>[] = [
   { value: 'wizard', label: 'Волшебник' },
   { value: 'thief', label: 'Вор' },
   { value: 'cleric', label: 'Клирик' },
+  { value: 'barbarian', label: 'Варвар' },
+  { value: 'bard', label: 'Бард' },
+  { value: 'ranger', label: 'Рейнджер' },
 ]
 
 export const GENDERS: Option<PlayerStats['gender']>[] = [
@@ -49,8 +57,8 @@ export function power(p: Pick<Player, 'level' | 'gearBonus'>): number {
   return p.level + p.gearBonus
 }
 
-export function clampLevel(level: number): number {
-  return Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, level))
+export function clampLevel(level: number, endLevel = DEFAULT_END_LEVEL): number {
+  return Math.max(MIN_LEVEL, Math.min(endLevel, level))
 }
 
 export function clampGearBonus(bonus: number): number {

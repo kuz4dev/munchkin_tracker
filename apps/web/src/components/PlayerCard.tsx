@@ -1,11 +1,12 @@
-import { CLASSES, getLabel, MAX_LEVEL, power, RACES, type Player } from '@munchkin/core'
+import { CLASSES, DEFAULT_END_LEVEL, getLabel, power, RACES, type Player } from '@munchkin/core'
 
 interface PlayerCardProps {
   player: Player
   isHost?: boolean
+  endLevel?: number
 }
 
-export function PlayerCard({ player, isHost = false }: PlayerCardProps) {
+export function PlayerCard({ player, isHost = false, endLevel = DEFAULT_END_LEVEL }: PlayerCardProps) {
   const online = player.connected
   return (
     <article
@@ -33,7 +34,7 @@ export function PlayerCard({ player, isHost = false }: PlayerCardProps) {
         <div className={`mt-2 h-1.5 overflow-hidden rounded-full ${online ? 'bg-secondary' : 'bg-border'}`} aria-hidden="true">
           <div
             className={`h-full rounded-full transition-[width] duration-500 ${online ? 'bg-primary' : 'bg-muted-foreground/50'}`}
-            style={{ width: `${(player.level / MAX_LEVEL) * 100}%` }}
+            style={{ width: `${(player.level / endLevel) * 100}%` }}
           />
         </div>
       </div>

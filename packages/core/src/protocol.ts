@@ -5,8 +5,8 @@ export interface PlayerStats {
   level: number
   gearBonus: number
   gender: 'male' | 'female'
-  race: 'human' | 'elf' | 'dwarf' | 'halfling'
-  class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric'
+  race: 'human' | 'elf' | 'dwarf' | 'halfling' | 'orc' | 'gnome'
+  class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric' | 'barbarian' | 'bard' | 'ranger'
 }
 
 export interface Player extends PlayerStats {
@@ -27,8 +27,9 @@ export interface ChangeLogEntry {
    * For 'finish': newValue holds the winner's name (empty if none).
    * For 'flee': newValue holds the die roll.
    * For 'die': oldValue and newValue hold "level/gear".
+   * For 'end_level': oldValue and newValue hold the winning level.
    */
-  eventType: 'join' | 'leave' | 'stat_change' | 'finish' | 'flee' | 'die'
+  eventType: 'join' | 'leave' | 'stat_change' | 'finish' | 'flee' | 'die' | 'end_level'
   field?: string
   oldValue?: string
   newValue?: string
@@ -49,6 +50,8 @@ export interface RoomStateMessage {
   winnerId?: string
   /** The player who may finish the game */
   hostId?: string
+  /** The level that wins the game */
+  endLevel?: number
   /** Unix ms */
   createdAt: number
   /** Unix ms, only for finished games */
@@ -81,6 +84,11 @@ export interface HostChangedMessage {
   hostId?: string
 }
 
+export interface EndLevelChangedMessage {
+  type: 'end_level_changed'
+  endLevel: number
+}
+
 export interface GameFinishedMessage {
   type: 'game_finished'
   status: 'finished'
@@ -100,6 +108,7 @@ export type ServerMessage =
   | PlayerUpdatedMessage
   | ChangeLogEntryMessage
   | HostChangedMessage
+  | EndLevelChangedMessage
   | GameFinishedMessage
   | ErrorMessage
 
@@ -136,11 +145,18 @@ export interface DieMessage {
   loseLevel?: boolean
 }
 
+/** The host changes the level that wins the game. */
+export interface SetEndLevelMessage {
+  type: 'set_end_level'
+  endLevel: number
+}
+
 export type ClientMessage =
   | JoinRoomMessage
   | UpdateStatsMessage
   | LeaveRoomMessage
   | FinishGameMessage
+  | SetEndLevelMessage
   | FleeMessage
   | DieMessage
 

@@ -58,7 +58,7 @@ describe('RoomPage in a game', () => {
   }
 
   afterEach(() => {
-    gameStore.setState({ roomCode: '', playerId: '', players: {}, hostId: '', status: 'active', winnerId: '' })
+    gameStore.setState({ roomCode: '', playerId: '', players: {}, hostId: '', status: 'active', winnerId: '', endLevel: 10 })
   })
 
   it('lets only the host finish the game', async () => {
@@ -96,6 +96,19 @@ describe('RoomPage in a game', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     expect(leaveRoom).toHaveBeenCalled()
     expect(await screen.findByText('home')).toBeInTheDocument()
+  })
+
+  it('offers the host to finish at a raised end level, not at 10', async () => {
+    const { player } = await import('@/test/fixtures')
+    const act = await inRoom({ players: { p1: player('p1', 'Alice'), p2: player('p2', 'Bob', { level: 9 }) }, hostId: 'p1', endLevel: 12 })
+    act(() => {
+      gameStore.setState((s) => ({ players: { ...s.players, p2: player('p2', 'Bob', { level: 10 }) } }))
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    act(() => {
+      gameStore.setState((s) => ({ players: { ...s.players, p2: player('p2', 'Bob', { level: 12 }) } }))
+    })
+    expect(await screen.findByText('12 уровень достигнут')).toBeInTheDocument()
   })
 
   it('lets anyone die, closing the fight, and applies the choice', async () => {

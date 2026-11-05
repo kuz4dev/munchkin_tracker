@@ -5,7 +5,8 @@ export type CombatResult = 'win' | 'lose' | 'draw'
 
 export interface CombatInput {
   player: Pick<Player, 'level' | 'gearBonus'>
-  ally?: Pick<Player, 'level' | 'gearBonus'> | null
+  /** Everyone helping the player */
+  allies?: readonly Pick<Player, 'level' | 'gearBonus'>[]
   /** Bonus from one-shot cards played for the player's side */
   playerCardBonus?: number
   monsterPower: number
@@ -14,7 +15,7 @@ export interface CombatInput {
 }
 
 export interface CombatOutcome {
-  /** Player (plus ally) power before cards */
+  /** Player (plus allies) power before cards */
   playerBase: number
   playerTotal: number
   monsterTotal: number
@@ -25,7 +26,7 @@ export interface CombatOutcome {
 
 /** Munchkin combat: the players win only if strictly stronger; a tie goes to the monster. */
 export function resolveCombat(input: CombatInput): CombatOutcome {
-  const playerBase = power(input.player) + (input.ally ? power(input.ally) : 0)
+  const playerBase = (input.allies ?? []).reduce((sum, ally) => sum + power(ally), power(input.player))
   const playerTotal = playerBase + (input.playerCardBonus ?? 0)
   const monsterTotal = input.monsterPower + (input.monsterCardBonus ?? 0)
   const result: CombatResult =

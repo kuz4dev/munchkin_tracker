@@ -4,8 +4,6 @@ import { Handshake, Minus, Plus, Skull, Trophy } from 'lucide-react'
 import { RadioGroup } from 'radix-ui'
 import { useId, useState, type ReactNode } from 'react'
 
-const NO_ALLY = '__none__'
-
 interface CombatModeProps {
   players: Player[]
   /** Who fights by default, usually the current player */
@@ -17,24 +15,28 @@ interface CombatModeProps {
 /** Combat calculator. Lives inside a sheet, so its state resets on close. */
 export function CombatMode({ players, defaultPlayerId = '', lostActions }: CombatModeProps) {
   const [playerId, setPlayerId] = useState(defaultPlayerId)
-  const [allyId, setAllyId] = useState(NO_ALLY)
+  const [allyIds, setAllyIds] = useState<readonly string[]>([])
   const [monsterInput, setMonsterInput] = useState('')
   const [playerCards, setPlayerCards] = useState(0)
   const [monsterCards, setMonsterCards] = useState(0)
 
   // A chosen player may leave mid-fight: treat them as unselected
   const player = players.find((p) => p.id === playerId)
-  const ally = player ? players.find((p) => p.id === allyId && p.id !== player.id) : undefined
+  const allies = player ? players.filter((p) => allyIds.includes(p.id) && p.id !== player.id) : []
   const monsterPower = Number.parseInt(monsterInput, 10)
   const outcome =
     player && !Number.isNaN(monsterPower)
-      ? resolveCombat({ player, ally, playerCardBonus: playerCards, monsterPower, monsterCardBonus: monsterCards })
+      ? resolveCombat({ player, allies, playerCardBonus: playerCards, monsterPower, monsterCardBonus: monsterCards })
       : null
-  const side = player ? (ally ? `${player.name} + ${ally.name}` : player.name) : ''
+  const side = player ? [player, ...allies].map((p) => p.name).join(' + ') : ''
 
   function choosePlayer(id: string) {
     setPlayerId(id)
-    if (allyId === id) setAllyId(NO_ALLY)
+    setAllyIds((ids) => ids.filter((ally) => ally !== id))
+  }
+
+  function toggleAlly(id: string) {
+    setAllyIds((ids) => (ids.includes(id) ? ids.filter((ally) => ally !== id) : [...ids, id]))
   }
 
   function stepMonster(delta: 1 | -1) {
@@ -59,28 +61,43 @@ export function CombatMode({ players, defaultPlayerId = '', lostActions }: Comba
           <Field
             label={
               <>
-                Союзник <span className="font-medium text-muted-foreground">· необязательно</span>
+                Союзники <span className="font-medium text-muted-foreground">· необязательно, можно несколько</span>
               </>
             }
           >
             {(labelId) => (
-              <ChipGroup labelledBy={labelId} value={ally ? allyId : NO_ALLY} onChange={setAllyId}>
-                <RadioGroup.Item
-                  value={NO_ALLY}
+              <div role="group" aria-labelledby={labelId} className={chipRowClass}>
+                <button
+                  type="button"
+                  aria-pressed={allies.length === 0}
+                  onClick={() => setAllyIds([])}
                   className={cn(
                     chipClass,
                     'px-4 text-[15px] font-bold',
-                    ally ? 'border-dashed border-border text-muted-foreground' : 'border-primary bg-primary text-primary-foreground',
+                    allies.length > 0 ? 'border-dashed border-border text-muted-foreground' : 'border-primary bg-primary text-primary-foreground',
                   )}
                 >
-                  Без союзника
-                </RadioGroup.Item>
+                  Без союзников
+                </button>
                 {players
                   .filter((p) => p.id !== player.id)
-                  .map((p) => (
-                    <PlayerChip key={p.id} player={p} checked={p.id === ally?.id} />
-                  ))}
-              </ChipGroup>
+                  .map((p) => {
+                    const checked = allies.includes(p)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked}
+                        aria-label={chipLabel(p)}
+                        onClick={() => toggleAlly(p.id)}
+                        className={playerChipClass(checked)}
+                      >
+                        <ChipBody player={p} checked={checked} />
+                      </button>
+                    )
+                  })}
+              </div>
             )}
           </Field>
 
@@ -194,6 +211,8 @@ function Field({ label, htmlFor, children }: FieldProps) {
   )
 }
 
+const chipRowClass = '-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]'
+
 const chipClass =
   'flex h-[52px] shrink-0 items-center rounded-full border-2 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
 
@@ -207,37 +226,44 @@ interface ChipGroupProps {
 /** A row of chips that scrolls sideways when the table is large. */
 function ChipGroup({ labelledBy, value, onChange, children }: ChipGroupProps) {
   return (
-    <RadioGroup.Root
-      aria-labelledby={labelledBy}
-      orientation="horizontal"
-      value={value}
-      onValueChange={onChange}
-      className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]"
-    >
+    <RadioGroup.Root aria-labelledby={labelledBy} orientation="horizontal" value={value} onValueChange={onChange} className={chipRowClass}>
       {children}
     </RadioGroup.Root>
   )
 }
 
+const chipLabel = (p: Player) => `${p.name}, уровень ${p.level}, сила ${power(p)}`
+
+const playerChipClass = (checked: boolean) =>
+  cn(chipClass, 'gap-2 pr-4 pl-[5px] text-left', checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background')
+
 function PlayerChip({ player, checked }: { player: Player; checked: boolean }) {
   return (
-    <RadioGroup.Item
-      value={player.id}
-      aria-label={`${player.name}, сила ${power(player)}`}
-      className={cn(chipClass, 'gap-2 pr-4 pl-[5px]', checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background')}
-    >
+    <RadioGroup.Item value={player.id} aria-label={chipLabel(player)} className={playerChipClass(checked)}>
+      <ChipBody player={player} checked={checked} />
+    </RadioGroup.Item>
+  )
+}
+
+function ChipBody({ player, checked }: { player: Player; checked: boolean }) {
+  return (
+    <>
       <span
         className={cn(
-          'flex size-[38px] items-center justify-center rounded-full font-display text-[15px] font-extrabold text-cocoa',
+          'flex size-[38px] shrink-0 items-center justify-center rounded-full font-display text-[15px] font-extrabold text-cocoa',
           checked ? 'bg-mustard' : 'bg-sand',
         )}
         aria-hidden="true"
       >
         {player.name.charAt(0).toUpperCase()}
       </span>
-      <span className="max-w-32 truncate text-[15px] font-bold">{player.name}</span>
-      <span className={cn('text-[13px] font-bold tabular-nums', checked ? 'text-[#ffd9c2]' : 'text-muted-foreground')}>{power(player)}</span>
-    </RadioGroup.Item>
+      <span className="min-w-0">
+        <span className="block max-w-32 truncate text-[15px] leading-tight font-bold">{player.name}</span>
+        <span className={cn('block text-xs leading-tight font-semibold tabular-nums', checked ? 'text-[#ffe6d6]' : 'text-muted-foreground')}>
+          ур. {player.level} · сила {power(player)}
+        </span>
+      </span>
+    </>
   )
 }
 

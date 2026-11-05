@@ -1,5 +1,4 @@
 import {
-  MAX_LEVEL,
   selectAllPlayers,
   selectConnected,
   selectCurrentPlayer,
@@ -16,6 +15,7 @@ import { ChangeLog } from '@/components/ChangeLog'
 import { DoorArt } from '@/components/art'
 import { CombatMode } from '@/components/CombatMode'
 import { DeathDialog } from '@/components/DeathDialog'
+import { EndLevelControl } from '@/components/EndLevelControl'
 import { FinishGameDialog } from '@/components/FinishGameDialog'
 import { FleeActions } from '@/components/FleeActions'
 import { GameSummary } from '@/components/GameSummary'
@@ -43,6 +43,7 @@ export default function RoomPage() {
   const isHost = useGame(selectIsHost)
   const host = useGame(selectHost)
   const isFinished = useGame(selectIsFinished)
+  const endLevel = useGame((s) => s.endLevel)
   const changelog = useGame((s) => s.changelog)
   const hasOlder = useGame(selectHasOlder)
   const loadingOlder = useGame((s) => s.loadingOlder)
@@ -85,7 +86,7 @@ export default function RoomPage() {
     if (isHost && !isFinished) {
       const champion = players.find((p) => {
         const was = before.get(p.id)
-        return was !== undefined && was < MAX_LEVEL && p.level === MAX_LEVEL
+        return was !== undefined && was < endLevel && p.level >= endLevel
       })
       if (champion) {
         setSuggestedWinner(champion.id)
@@ -93,7 +94,7 @@ export default function RoomPage() {
       }
     }
     previousLevels.current = new Map(players.map((p) => [p.id, p.level]))
-  }, [players, isHost, isFinished])
+  }, [players, isHost, isFinished, endLevel])
 
   function leave() {
     gameActions().leaveRoom()
@@ -137,7 +138,7 @@ export default function RoomPage() {
           </>
         ) : (
           <>
-            <StatsEditor player={me} isHost={isHost} onChange={(stats) => gameActions().updateStats(stats)} />
+            <StatsEditor player={me} isHost={isHost} endLevel={endLevel} onChange={(stats) => gameActions().updateStats(stats)} />
 
             <div className="grid grid-cols-2 gap-2.5">
               <Sheet open={combatOpen} onOpenChange={setCombatOpen}>
@@ -187,6 +188,13 @@ export default function RoomPage() {
                 </Button>
               )}
             </div>
+            <EndLevelControl
+              endLevel={endLevel}
+              players={players}
+              isHost={isHost}
+              connected={connected}
+              onChange={(level) => gameActions().setEndLevel(level)}
+            />
             {!isHost && host && (
               <p className="text-center text-[13px] text-muted-foreground">Завершить игру может хост — {host.name}</p>
             )}
@@ -197,7 +205,7 @@ export default function RoomPage() {
               <section className="flex flex-col gap-3">
                 <h2 className="mt-2.5 font-display text-lg font-extrabold">За столом</h2>
                 {others.map((p) => (
-                  <PlayerCard key={p.id} player={p} isHost={p.id === host?.id} />
+                  <PlayerCard key={p.id} player={p} isHost={p.id === host?.id} endLevel={endLevel} />
                 ))}
               </section>
             ) : (
@@ -230,6 +238,7 @@ export default function RoomPage() {
                 players={players}
                 playerId={playerId}
                 suggestedWinnerId={suggestedWinner}
+                endLevel={endLevel}
                 onFinish={(winner) => gameActions().finishGame(winner)}
               />
             )}

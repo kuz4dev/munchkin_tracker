@@ -2,10 +2,10 @@ import {
   CLASSES,
   clampGearBonus,
   clampLevel,
+  DEFAULT_END_LEVEL,
   GENDERS,
   getLabel,
   MAX_GEAR_BONUS,
-  MAX_LEVEL,
   MIN_GEAR_BONUS,
   MIN_LEVEL,
   power,
@@ -24,11 +24,13 @@ import { plural } from '@/lib/plural'
 interface StatsEditorProps {
   player: Player
   isHost: boolean
+  /** The level that wins the game */
+  endLevel?: number
   onChange: (stats: Partial<PlayerStats>) => void
 }
 
-export function StatsEditor({ player, isHost, onChange }: StatsEditorProps) {
-  const toWin = MAX_LEVEL - player.level
+export function StatsEditor({ player, isHost, endLevel = DEFAULT_END_LEVEL, onChange }: StatsEditorProps) {
+  const toWin = endLevel - player.level
   return (
     <div className="flex flex-col gap-3.5">
       <section className="relative overflow-hidden rounded-[28px] bg-primary p-5 text-primary-foreground">
@@ -62,12 +64,12 @@ export function StatsEditor({ player, isHost, onChange }: StatsEditorProps) {
           role="progressbar"
           aria-label="Уровень"
           aria-valuemin={MIN_LEVEL}
-          aria-valuemax={MAX_LEVEL}
+          aria-valuemax={endLevel}
           aria-valuenow={player.level}
         >
           <div
             className="h-full rounded-full bg-mustard transition-[width] duration-500 ease-out"
-            style={{ width: `${(player.level / MAX_LEVEL) * 100}%` }}
+            style={{ width: `${(player.level / endLevel) * 100}%` }}
           />
         </div>
         <p className="relative mt-2 text-[13px]">
@@ -80,8 +82,8 @@ export function StatsEditor({ player, isHost, onChange }: StatsEditorProps) {
           label="Уровень"
           value={player.level}
           canDecrease={player.level > MIN_LEVEL}
-          canIncrease={player.level < MAX_LEVEL}
-          onStep={(d) => onChange({ level: clampLevel(player.level + d) })}
+          canIncrease={player.level < endLevel}
+          onStep={(d) => onChange({ level: clampLevel(player.level + d, endLevel) })}
         />
         <Stepper
           label="Бонусы"

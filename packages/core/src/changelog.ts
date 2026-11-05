@@ -91,6 +91,8 @@ export function describeGroup(group: ChangeLogGroup): string {
       const roll = Number(group.lastNewValue)
       return `${name} смывается: выпало ${roll}, ${fleeSucceeded(roll) ? 'удалось' : 'не вышло'}`
     }
+    case 'end_level':
+      return `${name}: игра до ${group.lastNewValue} уровня`
     case 'die':
       return describeDeath(name, group.firstOldValue, group.lastNewValue)
     case 'stat_change': {

@@ -6,6 +6,7 @@ import { ChangeLog } from './ChangeLog'
 import { gameStore } from '@/game/store'
 import { CombatMode } from './CombatMode'
 import { DeathDialog } from './DeathDialog'
+import { EndLevelControl } from './EndLevelControl'
 import { FinishGameDialog } from './FinishGameDialog'
 import { FleeActions, MIN_ROLL_MS } from './FleeActions'
 import { GameSummary } from './GameSummary'
@@ -117,13 +118,13 @@ describe('CombatMode', () => {
     const players = [player('p1', 'Alice', { level: 5, gearBonus: 3 }), player('p2', 'Bob', { level: 2 })]
     render(<CombatMode players={players} />)
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Alice, сила 8' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Alice, уровень 5, сила 8' }))
     await userEvent.type(screen.getByLabelText('Сила противника'), '10')
     expect(screen.getByRole('status')).toHaveTextContent('Поражение')
 
-    const allies = screen.getByRole('radiogroup', { name: /Союзник/ })
-    expect(within(allies).getByRole('radio', { name: 'Без союзника' })).toBeChecked()
-    await userEvent.click(within(allies).getByRole('radio', { name: 'Bob, сила 2' }))
+    const allies = screen.getByRole('group', { name: /Союзники/ })
+    expect(within(allies).getByRole('button', { name: 'Без союзников' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(allies).getByRole('checkbox', { name: 'Bob, уровень 2, сила 2' }))
     expect(screen.getByRole('status')).toHaveTextContent('Ничья') // 8 + 2 = 10
 
     await userEvent.click(screen.getByRole('button', { name: 'Alice + Bob: карта +1' }))
@@ -133,12 +134,89 @@ describe('CombatMode', () => {
 
   it('starts with the current player and steps the monster power', async () => {
     render(<CombatMode players={[player('p1', 'Alice', { level: 3 })]} defaultPlayerId="p1" />)
-    expect(screen.getByRole('radio', { name: 'Alice, сила 3' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Alice, уровень 3, сила 3' })).toBeChecked()
     expect(screen.getByRole('button', { name: 'Сила противника: меньше' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Сила противника: больше' }))
     await userEvent.click(screen.getByRole('button', { name: 'Сила противника: больше' }))
     expect(screen.getByLabelText('Сила противника')).toHaveValue(2)
     expect(screen.getByRole('status')).toHaveTextContent('Победа')
+  })
+})
+
+describe('CombatMode, several allies', () => {
+  it('adds them all up, and one click on "no allies" clears them', async () => {
+    const players = [player('p1', 'Alice', { level: 5 }), player('p2', 'Bob', { level: 2 }), player('p3', 'Vasya', { level: 3, gearBonus: 1 })]
+    render(<CombatMode players={players} defaultPlayerId="p1" />)
+    await userEvent.type(screen.getByLabelText('Сила противника'), '10')
+    expect(screen.getByRole('status')).toHaveTextContent('Поражение') // 5 vs 10
+
+    const allies = screen.getByRole('group', { name: /Союзники/ })
+    await userEvent.click(within(allies).getByRole('checkbox', { name: /Bob/ }))
+    await userEvent.click(within(allies).getByRole('checkbox', { name: /Vasya/ }))
+    expect(screen.getByRole('status')).toHaveTextContent('Победа') // 5 + 2 + 4 = 11
+    expect(screen.getByRole('button', { name: 'Alice + Bob + Vasya: карта +1' })).toBeInTheDocument()
+
+    await userEvent.click(within(allies).getByRole('checkbox', { name: /Bob/ }))
+    expect(screen.getByRole('status')).toHaveTextContent('Поражение') // 5 + 4 = 9
+
+    await userEvent.click(within(allies).getByRole('button', { name: 'Без союзников' }))
+    expect(screen.getByRole('button', { name: 'Alice: карта +1' })).toBeInTheDocument()
+  })
+
+  it('a player who becomes the fighter stops being their own ally', async () => {
+    const players = [player('p1', 'Alice'), player('p2', 'Bob')]
+    render(<CombatMode players={players} defaultPlayerId="p1" />)
+    await userEvent.click(within(screen.getByRole('group', { name: /Союзники/ })).getByRole('checkbox', { name: /Bob/ }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Кто сражается' })).getByRole('radio', { name: /Bob/ }))
+    expect(within(screen.getByRole('group', { name: /Союзники/ })).getByRole('checkbox', { name: /Alice/ })).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Без союзников' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('EndLevelControl', () => {
+  const players = [player('p1', 'Alice', { level: 12 }), player('p2', 'Bob')]
+
+  it('is plain text for guests', () => {
+    render(<EndLevelControl endLevel={20} players={players} isHost={false} connected onChange={() => {}} />)
+    expect(screen.getByText('Игра до 20 уровня')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('lets the host change it, not below the highest level', async () => {
+    const onChange = vi.fn()
+    render(<EndLevelControl endLevel={12} players={players} isHost connected onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Игра до 12 уровня, изменить' }))
+
+    expect(screen.getByRole('button', { name: 'Меньше' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '10' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Больше' }))
+    await userEvent.click(screen.getByRole('button', { name: '20' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Больше' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(onChange).toHaveBeenCalledWith(21)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('StatsEditor, end level and expansions', () => {
+  it('respects the game\'s end level', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice', { level: 10 })} isHost={false} endLevel={20} onChange={onChange} />)
+    expect(screen.getByText('До победы 10 уровней')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Уровень: больше' }))
+    expect(onChange).toHaveBeenCalledWith({ level: 11 })
+  })
+
+  it('offers races and classes from the expansions', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Человек' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Раса' })).getByRole('radio', { name: 'Орк' }))
+    expect(onChange).toHaveBeenCalledWith({ race: 'orc' })
+    await userEvent.click(screen.getByRole('button', { name: 'Класс: Без класса' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Класс' })).getByRole('radio', { name: 'Рейнджер' }))
+    expect(onChange).toHaveBeenCalledWith({ class: 'ranger' })
   })
 })
 

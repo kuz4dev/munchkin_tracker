@@ -1,4 +1,4 @@
-import { byLevelThenName, MAX_LEVEL, power, type Player } from '@munchkin/core'
+import { byLevelThenName, DEFAULT_END_LEVEL, power, type Player } from '@munchkin/core'
 import { cn } from 'cn'
 import { Crown, Flag } from 'lucide-react'
 import { RadioGroup } from 'radix-ui'
@@ -14,10 +14,11 @@ interface FinishGameDialogProps {
   playerId: string
   /** Preselected winner, e.g. the player who just reached the last level */
   suggestedWinnerId?: string
+  endLevel?: number
   onFinish: (winnerId?: string) => void
 }
 
-export function FinishGameDialog({ open, onOpenChange, players, playerId, suggestedWinnerId, onFinish }: FinishGameDialogProps) {
+export function FinishGameDialog({ open, onOpenChange, players, playerId, suggestedWinnerId, endLevel = DEFAULT_END_LEVEL, onFinish }: FinishGameDialogProps) {
   const suggested = players.find((p) => p.id === suggestedWinnerId)
   const title = !suggested ? 'Завершить игру' : suggested.id === playerId ? 'Победа?' : `Победа: ${suggested.name}?`
 
@@ -25,7 +26,7 @@ export function FinishGameDialog({ open, onOpenChange, players, playerId, sugges
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         title={title}
-        eyebrow={suggested?.level === MAX_LEVEL ? `${MAX_LEVEL} уровень достигнут` : undefined}
+        eyebrow={suggested && suggested.level >= endLevel ? `${endLevel} уровень достигнут` : undefined}
         icon={suggested ? <Crown aria-hidden="true" /> : <Flag aria-hidden="true" />}
         description="Игра завершится для всех. Менять характеристики после этого будет нельзя."
       >

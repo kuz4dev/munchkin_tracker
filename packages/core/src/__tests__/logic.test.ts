@@ -58,15 +58,15 @@ describe('combat', () => {
     expect(resolveCombat({ player: p, monsterPower: 9 }).result).toBe('lose')
   })
 
-  it('adds the ally and card bonuses', () => {
+  it('adds every ally and card bonuses', () => {
     const r = resolveCombat({
       player: { level: 3, gearBonus: 2 },
-      ally: { level: 4, gearBonus: 1 },
+      allies: [{ level: 4, gearBonus: 1 }, { level: 2, gearBonus: 0 }],
       playerCardBonus: 3,
       monsterPower: 12,
       monsterCardBonus: 5,
     })
-    expect(r).toMatchObject({ playerBase: 10, playerTotal: 13, monsterTotal: 17, result: 'lose', margin: 4 })
+    expect(r).toMatchObject({ playerBase: 12, playerTotal: 15, monsterTotal: 17, result: 'lose', margin: 2 })
   })
 
   it('formats bonuses', () => {
@@ -88,6 +88,7 @@ describe('standings', () => {
 describe('game helpers', () => {
   it('clamps stats to server limits', () => {
     expect([clampLevel(0), clampLevel(11), clampLevel(5)]).toEqual([1, 10, 5])
+    expect(clampLevel(11, 20)).toBe(11)
     expect([clampGearBonus(-1), clampGearBonus(1000)]).toEqual([0, 999])
   })
 
