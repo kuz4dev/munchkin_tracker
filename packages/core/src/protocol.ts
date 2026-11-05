@@ -23,8 +23,12 @@ export interface ChangeLogEntry {
   timestamp: number
   playerId: string
   playerName: string
-  /** For 'finish': newValue holds the winner's name (empty if none) */
-  eventType: 'join' | 'leave' | 'stat_change' | 'finish'
+  /**
+   * For 'finish': newValue holds the winner's name (empty if none).
+   * For 'flee': newValue holds the die roll.
+   * For 'die': oldValue and newValue hold "level/gear".
+   */
+  eventType: 'join' | 'leave' | 'stat_change' | 'finish' | 'flee' | 'die'
   field?: string
   oldValue?: string
   newValue?: string
@@ -121,7 +125,24 @@ export interface FinishGameMessage {
   winnerId?: string
 }
 
-export type ClientMessage = JoinRoomMessage | UpdateStatsMessage | LeaveRoomMessage | FinishGameMessage
+/** Asks the server to roll the die for running away. */
+export interface FleeMessage {
+  type: 'flee'
+}
+
+export interface DieMessage {
+  type: 'die'
+  /** Reset the level as well as the gear */
+  loseLevel?: boolean
+}
+
+export type ClientMessage =
+  | JoinRoomMessage
+  | UpdateStatsMessage
+  | LeaveRoomMessage
+  | FinishGameMessage
+  | FleeMessage
+  | DieMessage
 
 /** Server error messages the client reacts to (see server/internal/room). */
 export const ServerErrors = {

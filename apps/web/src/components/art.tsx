@@ -5,22 +5,68 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 type ArtProps = { className?: string }
 
-type Pip = readonly [number, number]
-const C: Pip = [92, 198]
-const TL: Pip = [70, 176]
-const TR: Pip = [114, 176]
-const ML: Pip = [70, 198]
-const MR: Pip = [114, 198]
-const BL: Pip = [70, 220]
-const BR: Pip = [114, 220]
-const DIE_FACES: readonly (readonly Pip[])[] = [
-  [C],
-  [TL, BR],
-  [TL, C, BR],
-  [TL, TR, BL, BR],
-  [TL, TR, C, BL, BR],
-  [TL, TR, ML, MR, BL, BR],
+// Pip offsets from the die's centre, for faces 1 to 6
+const NEAR = -22
+const FAR = 22
+const DIE_FACES: readonly (readonly (readonly [number, number])[])[] = [
+  [[0, 0]],
+  [[NEAR, NEAR], [FAR, FAR]],
+  [[NEAR, NEAR], [0, 0], [FAR, FAR]],
+  [[NEAR, NEAR], [FAR, NEAR], [NEAR, FAR], [FAR, FAR]],
+  [[NEAR, NEAR], [FAR, NEAR], [0, 0], [NEAR, FAR], [FAR, FAR]],
+  [[NEAR, NEAR], [FAR, NEAR], [NEAR, 0], [FAR, 0], [NEAR, FAR], [FAR, FAR]],
 ]
+
+function DiePips({ face, cx, cy }: { face: number; cx: number; cy: number }) {
+  return (
+    <g fill="var(--cocoa)">
+      {DIE_FACES[face - 1]!.map(([dx, dy]) => (
+        <circle key={`${dx}/${dy}`} cx={cx + dx} cy={cy + dy} r="8" />
+      ))}
+    </g>
+  )
+}
+
+/** The die from the home page. While rolling it tumbles and its faces flicker. */
+export function Die({ face, rolling = false, className = '' }: ArtProps & { face: number; rolling?: boolean }) {
+  const [flicker, setFlicker] = useState(face)
+  useEffect(() => {
+    if (!rolling) return
+    const t = setInterval(() => setFlicker((f) => (f % 6) + 1), 120)
+    return () => clearInterval(t)
+  }, [rolling])
+
+  return (
+    <svg viewBox="0 0 96 96" fill="none" className={`overflow-visible ${className}`} aria-hidden="true">
+      <g className={rolling ? 'die-rolling' : 'die-settled'}>
+        <g transform="rotate(-10 48 48)">
+          <rect width="96" height="96" rx="22" fill="var(--mustard)" />
+          <DiePips face={rolling ? flicker : face} cx={48} cy={48} />
+        </g>
+      </g>
+    </svg>
+  )
+}
+
+/** Death: a tombstone on a hill. */
+export function TombstoneArt({ className = '' }: ArtProps) {
+  return (
+    <svg viewBox="0 0 112 112" fill="none" className={className} aria-hidden="true">
+      <circle cx="56" cy="56" r="56" fill="var(--sand)" />
+      <path d="M30 96V50a26 26 0 0 1 52 0v46Z" fill="var(--terracotta-deep)" />
+      <path d="M38 96V52a18 18 0 0 1 36 0v44Z" fill="var(--terracotta)" />
+      <path d="M56 42v28M46 52h20" stroke="var(--mustard)" strokeWidth="5" strokeLinecap="round" />
+      <path d="M14 96h84" stroke="var(--cocoa)" strokeWidth="3" strokeLinecap="round" />
+      <path
+        d="M24 96c1-6 3-8 5-9M26 96c-1-4-3-6-5-7M88 96c1-6 3-8 5-9M90 96c-1-4-3-6-5-7"
+        stroke="var(--online)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const ROLL_MS = 700
 
 /** Four-point sparkle centred on (x, y). */
@@ -36,7 +82,7 @@ function sparkle(x: number, y: number, r: number) {
  * animated (see .hero-* in index.css), so it stays cheap on phones.
  */
 export function HeroArt({ className = '' }: ArtProps) {
-  const [face, setFace] = useState(2)
+  const [face, setFace] = useState(3)
   const [roll, setRoll] = useState(0)
   const timers = useRef<number[]>([])
 
@@ -44,7 +90,7 @@ export function HeroArt({ className = '' }: ArtProps) {
     setRoll((n) => n + 1)
     // Swap the face mid-spin, while it is blurred by the motion
     timers.current.push(
-      window.setTimeout(() => setFace((f) => (f + 1 + Math.floor(Math.random() * 5)) % 6), ROLL_MS / 2),
+      window.setTimeout(() => setFace((f) => ((f + Math.floor(Math.random() * 5)) % 6) + 1), ROLL_MS / 2),
     )
   }, [])
 
@@ -86,11 +132,7 @@ export function HeroArt({ className = '' }: ArtProps) {
           >
             <g transform="rotate(-12 92 198)">
               <rect x="44" y="150" width="96" height="96" rx="22" fill="var(--mustard)" />
-              <g fill="var(--cocoa)">
-                {DIE_FACES[face]!.map(([cx, cy]) => (
-                  <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="8" />
-                ))}
-              </g>
+              <DiePips face={face} cx={92} cy={198} />
             </g>
           </g>
         </g>

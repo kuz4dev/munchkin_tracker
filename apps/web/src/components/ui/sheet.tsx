@@ -20,6 +20,8 @@ interface SheetContentProps extends Omit<ComponentProps<typeof DialogPrimitive.C
   icon?: ReactNode
   /** Visually hide the description (it is still announced) */
   hideDescription?: boolean
+  /** Visually hide the title, when the content has its own big heading */
+  hideTitle?: boolean
 }
 
 export function SheetContent({
@@ -28,6 +30,7 @@ export function SheetContent({
   eyebrow,
   icon,
   hideDescription = false,
+  hideTitle = false,
   className,
   children,
   ...props
@@ -46,7 +49,7 @@ export function SheetContent({
       >
         <div className="mx-auto mt-2.5 mb-1.5 h-[5px] w-11 shrink-0 rounded-full bg-border" aria-hidden="true" />
         <div className="overflow-y-auto overscroll-contain px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-start justify-between gap-3">
+          <div className={cn('flex items-start justify-between gap-3', hideTitle && 'justify-end')}>
             <div className="flex min-w-0 items-center gap-3.5">
               {icon && (
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-mustard text-cocoa [&_svg]:size-6">
@@ -55,7 +58,9 @@ export function SheetContent({
               )}
               <div className="min-w-0">
                 {eyebrow && <p className="text-[13px] font-bold text-primary">{eyebrow}</p>}
-                <DialogPrimitive.Title className="font-display text-[22px] leading-tight font-extrabold">{title}</DialogPrimitive.Title>
+                <DialogPrimitive.Title className={cn('font-display text-[22px] leading-tight font-extrabold', hideTitle && 'sr-only')}>
+                  {title}
+                </DialogPrimitive.Title>
               </div>
             </div>
             <DialogPrimitive.Close
@@ -85,23 +90,26 @@ interface ConfirmDialogProps {
   title: string
   description: ReactNode
   art?: ReactNode
+  /** Extra controls between the description and the buttons */
+  children?: ReactNode
   confirmLabel: string
   cancelLabel: string
   onConfirm: () => void
 }
 
 /** Centered confirmation for actions that are hard to undo. */
-export function ConfirmDialog({ open, onOpenChange, title, description, art, confirmLabel, cancelLabel, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, description, art, children, confirmLabel, cancelLabel, onConfirm }: ConfirmDialogProps) {
   return (
     <AlertDialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialogPrimitive.Portal>
         <AlertDialogPrimitive.Overlay className={overlayClass} />
-        <AlertDialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[30px] bg-card px-[22px] pt-[26px] pb-5 text-center text-card-foreground shadow-[0_20px_50px_rgba(58,36,32,0.35)] outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+        <AlertDialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 max-h-[92dvh] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto -translate-y-1/2 rounded-[30px] bg-card px-[22px] pt-[26px] pb-5 text-center text-card-foreground shadow-[0_20px_50px_rgba(58,36,32,0.35)] outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
           {art}
           <AlertDialogPrimitive.Title className="mt-4 font-display text-[22px] leading-tight font-extrabold">{title}</AlertDialogPrimitive.Title>
           <AlertDialogPrimitive.Description className="mt-2.5 text-[15px] leading-snug text-muted-foreground">
             {description}
           </AlertDialogPrimitive.Description>
+          {children}
           <AlertDialogPrimitive.Action
             onClick={onConfirm}
             className="mt-[22px] h-14 w-full rounded-[18px] bg-cocoa font-display text-[15px] font-semibold text-primary-foreground transition-transform outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"

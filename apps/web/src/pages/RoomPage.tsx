@@ -9,19 +9,22 @@ import {
   selectIsHost,
   selectOtherPlayers,
 } from '@munchkin/core'
-import { Flag, Swords } from 'lucide-react'
+import { Flag, Skull, Swords } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ChangeLog } from '@/components/ChangeLog'
 import { DoorArt } from '@/components/art'
 import { CombatMode } from '@/components/CombatMode'
+import { DeathDialog } from '@/components/DeathDialog'
 import { FinishGameDialog } from '@/components/FinishGameDialog'
+import { FleeActions } from '@/components/FleeActions'
 import { GameSummary } from '@/components/GameSummary'
 import { InviteButton } from '@/components/InviteButton'
 import { PlayerCard } from '@/components/PlayerCard'
 import { RoomHeader } from '@/components/RoomHeader'
 import { ServerWakeHint } from '@/components/ServerWakeHint'
 import { StatsEditor } from '@/components/StatsEditor'
+import { TableEventToast } from '@/components/TableEventToast'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { gameActions, gameStore, useGame, useGameShallow } from '@/game/store'
@@ -54,6 +57,8 @@ export default function RoomPage() {
 
   const [finishOpen, setFinishOpen] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
+  const [combatOpen, setCombatOpen] = useState(false)
+  const [deathOpen, setDeathOpen] = useState(false)
   const [suggestedWinner, setSuggestedWinner] = useState<string>()
 
   // Opened directly (reload, shared link): resume our seat or go home
@@ -113,6 +118,7 @@ export default function RoomPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       {roomCode && <RoomHeader code={roomCode} connected={connected} onLeave={requestLeave} />}
+      <TableEventToast entries={changelog} playerId={playerId} />
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3.5 px-4 pt-1.5 pb-[max(1.75rem,env(safe-area-inset-bottom))]">
         {resuming || !me ? (
@@ -133,12 +139,12 @@ export default function RoomPage() {
           <>
             <StatsEditor player={me} isHost={isHost} onChange={(stats) => gameActions().updateStats(stats)} />
 
-            <div className={`grid gap-2.5 ${isHost ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              <Sheet>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Sheet open={combatOpen} onOpenChange={setCombatOpen}>
                 <SheetTrigger asChild>
                   <Button
                     aria-label="Режим боя"
-                    className="h-14 rounded-[18px] bg-mustard font-display text-[15px] font-semibold text-cocoa hover:bg-mustard/90"
+                    className={`h-14 rounded-[18px] bg-mustard ${isHost ? 'col-span-2' : ''} font-display text-[15px] font-semibold text-cocoa hover:bg-mustard/90`}
                   >
                     <Swords className="size-5" aria-hidden="true" />
                     Бой
@@ -151,9 +157,22 @@ export default function RoomPage() {
                   hideDescription
                   className="h-[92dvh]"
                 >
-                  <CombatMode players={players} defaultPlayerId={playerId} />
+                  <CombatMode
+                    players={players}
+                    defaultPlayerId={playerId}
+                    lostActions={<FleeActions onDie={() => setDeathOpen(true)} onCloseCombat={() => setCombatOpen(false)} />}
+                  />
                 </SheetContent>
               </Sheet>
+
+              <Button
+                variant="outline"
+                className="h-14 rounded-[18px] border-2 bg-card text-[15px] font-bold text-lose hover:text-lose"
+                onClick={() => setDeathOpen(true)}
+              >
+                <Skull className="size-[18px]" aria-hidden="true" />
+                Погибнуть
+              </Button>
 
               {isHost && (
                 <Button
@@ -193,6 +212,16 @@ export default function RoomPage() {
                 </div>
               )
             )}
+
+            <DeathDialog
+              open={deathOpen}
+              onOpenChange={setDeathOpen}
+              player={me}
+              onConfirm={(loseLevel) => {
+                gameActions().die(loseLevel)
+                setCombatOpen(false)
+              }}
+            />
 
             {isHost && (
               <FinishGameDialog

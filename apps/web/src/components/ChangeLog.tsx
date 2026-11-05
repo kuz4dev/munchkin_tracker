@@ -1,5 +1,5 @@
 import { describeEntry, describeGroup, formatTime, groupChangelog, type ChangeLogEntry } from '@munchkin/core'
-import { ChevronDown, ChevronRight, ScrollText } from 'lucide-react'
+import { ChevronDown, ChevronRight, Dices, ScrollText, Skull } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { plural } from '@/lib/plural'
@@ -111,7 +111,11 @@ export function ChangeLog({ entries, hasOlder, loadingOlder, onLoadOlder }: Chan
                           <span className="text-xs text-muted-foreground">({group.entries.length} изм.)</span>
                         </button>
                       ) : (
-                        <span className="text-foreground">{describeGroup(group)}</span>
+                        <span className="flex items-start gap-1.5 text-foreground">
+                          {group.eventType === 'flee' && <Dices className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />}
+                          {group.eventType === 'die' && <Skull className="mt-0.5 size-4 shrink-0 text-lose" aria-hidden="true" />}
+                          {describeGroup(group)}
+                        </span>
                       )}
                     </div>
                     {multi && isOpen && (

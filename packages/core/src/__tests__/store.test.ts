@@ -212,6 +212,29 @@ describe('messages', () => {
   })
 })
 
+describe('flee and death', () => {
+  it('flee only asks the server: it rolls the die', async () => {
+    const { connection, s } = setup()
+    await s().createRoom('Alice')
+    s().flee()
+    expect(connection.sent.at(-1)).toEqual({ type: 'flee' })
+  })
+
+  it('die applies to our player at once, since our own echo is ignored', async () => {
+    const { connection, s } = setup()
+    await s().createRoom('Alice')
+    connection.emit(roomState({ players: [player('p1', 'Alice', { level: 7, gearBonus: 5, race: 'elf' })] }))
+
+    s().die(false)
+    expect(s().players.p1).toMatchObject({ level: 7, gearBonus: 0, race: 'elf' })
+    expect(connection.sent.at(-1)).toEqual({ type: 'die', loseLevel: false })
+
+    s().die(true)
+    expect(s().players.p1).toMatchObject({ level: 1, gearBonus: 0, race: 'elf' })
+    expect(connection.sent.at(-1)).toEqual({ type: 'die', loseLevel: true })
+  })
+})
+
 describe('server errors', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {})

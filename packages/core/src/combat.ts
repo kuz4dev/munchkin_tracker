@@ -33,6 +33,13 @@ export function resolveCombat(input: CombatInput): CombatOutcome {
   return { playerBase, playerTotal, monsterTotal, result, margin: Math.abs(playerTotal - monsterTotal) }
 }
 
+/** Running away works on a roll of this or higher. */
+export const FLEE_MIN_ROLL = 5
+
+export function fleeSucceeded(roll: number): boolean {
+  return roll >= FLEE_MIN_ROLL
+}
+
 export function formatBonus(n: number): string {
   if (n > 0) return `+${n}`
   if (n < 0) return `${n}`

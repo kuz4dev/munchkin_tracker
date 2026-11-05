@@ -1,3 +1,4 @@
+import { fleeSucceeded } from './combat'
 import { CLASSES, FIELD_LABELS, GENDERS, RACES, getLabel } from './game'
 import type { ChangeLogEntry } from './protocol'
 
@@ -64,6 +65,16 @@ export function formatFieldValue(field: string | undefined, value: string | unde
   }
 }
 
+function describeDeath(name: string, oldValue = '', newValue = ''): string {
+  const [oldLevel, oldGear] = oldValue.split('/')
+  const [newLevel, newGear] = newValue.split('/')
+  const lost = [
+    oldLevel !== newLevel && `уровень ${oldLevel} → ${newLevel}`,
+    oldGear !== newGear && `бонусы ${oldGear} → ${newGear}`,
+  ].filter(Boolean)
+  return lost.length > 0 ? `${name}: смерть, ${lost.join(', ')}` : `${name}: смерть`
+}
+
 /** One line describing a group, e.g. "Вася: уровень 3 → 5". */
 export function describeGroup(group: ChangeLogGroup): string {
   const name = group.playerName
@@ -76,6 +87,12 @@ export function describeGroup(group: ChangeLogGroup): string {
       return group.lastNewValue
         ? `Игра окончена, победитель: ${group.lastNewValue}`
         : 'Игра окончена без победителя'
+    case 'flee': {
+      const roll = Number(group.lastNewValue)
+      return `${name} смывается: выпало ${roll}, ${fleeSucceeded(roll) ? 'удалось' : 'не вышло'}`
+    }
+    case 'die':
+      return describeDeath(name, group.firstOldValue, group.lastNewValue)
     case 'stat_change': {
       const fieldLabel = FIELD_LABELS[group.field ?? ''] ?? group.field
       return `${name}: ${fieldLabel} ${formatFieldValue(group.field, group.firstOldValue)} → ${formatFieldValue(group.field, group.lastNewValue)}`

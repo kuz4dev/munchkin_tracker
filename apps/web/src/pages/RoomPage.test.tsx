@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -96,6 +96,25 @@ describe('RoomPage in a game', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     expect(leaveRoom).toHaveBeenCalled()
     expect(await screen.findByText('home')).toBeInTheDocument()
+  })
+
+  it('lets anyone die, closing the fight, and applies the choice', async () => {
+    const { player } = await import('@/test/fixtures')
+    const die = vi.spyOn(gameStore.getState(), 'die').mockImplementation(() => {})
+    await inRoom({ players: { p1: player('p1', 'Alice', { level: 7, gearBonus: 5 }), p2: player('p2', 'Bob') }, hostId: 'p2' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Погибнуть' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Погибнуть?' })
+    expect(dialog).toHaveTextContent('Бонусы 5 → 0, уровень 7 → 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Ещё поживу' }))
+    expect(die).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Режим боя' }))
+    await userEvent.type(await screen.findByLabelText('Сила противника'), '99')
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Погибнуть' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Погибнуть' }))
+    expect(die).toHaveBeenCalledWith(true)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('shows the results of a finished game', async () => {

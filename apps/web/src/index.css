@@ -235,6 +235,19 @@
   from { stroke-dashoffset: 1; }
 }
 
+/* The die in the flee sheet */
+.die-rolling,
+.die-settled {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.die-rolling {
+  animation: hero-roll 700ms cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
+}
+.die-settled {
+  animation: pop 500ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* Motion is decoration here: honour the system setting to reduce it */
 @media (prefers-reduced-motion: reduce) {
   *,

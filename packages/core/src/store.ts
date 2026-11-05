@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { ApiError, type Api } from './api'
 import type { Connection, ConnectionStatus } from './connection'
-import { normalizeRoomCode } from './game'
+import { MIN_GEAR_BONUS, MIN_LEVEL, normalizeRoomCode } from './game'
 import { ServerErrors, type ChangeLogEntry, type GameStatus, type Player, type PlayerStats, type ServerMessage } from './protocol'
 import type { SessionStorage } from './session'
 
@@ -48,6 +48,10 @@ export interface GameActions {
   updateStats(stats: Partial<PlayerStats>): void
   /** Ends the game for everyone (host only). Omit winnerId for no winner. */
   finishGame(winnerId?: string): void
+  /** Asks the server to roll for running away; the result arrives as a 'flee' journal entry. */
+  flee(): void
+  /** Our character dies: gear is lost, and the level too with loseLevel. */
+  die(loseLevel: boolean): void
   /** Prepends the previous page of history to the changelog. */
   loadOlder(): Promise<void>
   leaveRoom(): void
@@ -291,6 +295,20 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
 
       finishGame(winnerId) {
         connection.send({ type: 'finish_game', winnerId: winnerId || undefined })
+      },
+
+      flee() {
+        connection.send({ type: 'flee' })
+      },
+
+      die(loseLevel) {
+        const { players, playerId } = get()
+        const current = players[playerId]
+        if (!current) return
+        // Applied here too: the server's echo of our own changes is ignored
+        const updated: Player = { ...current, gearBonus: MIN_GEAR_BONUS, level: loseLevel ? MIN_LEVEL : current.level }
+        set({ players: { ...players, [playerId]: updated } })
+        connection.send({ type: 'die', loseLevel })
       },
 
       async loadOlder() {

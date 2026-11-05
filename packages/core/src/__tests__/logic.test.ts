@@ -104,3 +104,18 @@ describe('game helpers', () => {
     expect(formatTime(new Date(2026, 0, 1, 9, 5).getTime())).toBe('09:05')
   })
 })
+
+describe('flee and death in the journal', () => {
+  const line = (o: Partial<ChangeLogEntry>) => describeGroup(groupChangelog([e(o)])[0]!)
+
+  it('tells whether running away worked: 5 or 6', () => {
+    expect(line({ eventType: 'flee', newValue: '4' })).toBe('Igor смывается: выпало 4, не вышло')
+    expect(line({ eventType: 'flee', newValue: '5' })).toBe('Igor смывается: выпало 5, удалось')
+  })
+
+  it('lists only what death took', () => {
+    expect(line({ eventType: 'die', oldValue: '7/5', newValue: '1/0' })).toBe('Igor: смерть, уровень 7 → 1, бонусы 5 → 0')
+    expect(line({ eventType: 'die', oldValue: '7/5', newValue: '7/0' })).toBe('Igor: смерть, бонусы 5 → 0')
+    expect(line({ eventType: 'die', oldValue: '1/0', newValue: '1/0' })).toBe('Igor: смерть')
+  })
+})

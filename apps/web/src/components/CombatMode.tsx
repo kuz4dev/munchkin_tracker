@@ -10,10 +10,12 @@ interface CombatModeProps {
   players: Player[]
   /** Who fights by default, usually the current player */
   defaultPlayerId?: string
+  /** Shown when that player loses or draws: they can only flee or die for themselves */
+  lostActions?: ReactNode
 }
 
 /** Combat calculator. Lives inside a sheet, so its state resets on close. */
-export function CombatMode({ players, defaultPlayerId = '' }: CombatModeProps) {
+export function CombatMode({ players, defaultPlayerId = '', lostActions }: CombatModeProps) {
   const [playerId, setPlayerId] = useState(defaultPlayerId)
   const [allyId, setAllyId] = useState(NO_ALLY)
   const [monsterInput, setMonsterInput] = useState('')
@@ -166,6 +168,7 @@ export function CombatMode({ players, defaultPlayerId = '' }: CombatModeProps) {
               )}
             </div>
           </div>
+          {outcome.result !== 'win' && player?.id === defaultPlayerId && lostActions}
         </>
       )}
     </div>

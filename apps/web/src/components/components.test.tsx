@@ -1,14 +1,18 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { entry, player } from '@/test/fixtures'
 import { ChangeLog } from './ChangeLog'
+import { gameStore } from '@/game/store'
 import { CombatMode } from './CombatMode'
+import { DeathDialog } from './DeathDialog'
 import { FinishGameDialog } from './FinishGameDialog'
+import { FleeActions, MIN_ROLL_MS } from './FleeActions'
 import { GameSummary } from './GameSummary'
 import { PlayerCard } from './PlayerCard'
 import { ServerWakeHint, WAKE_HINT_DELAY } from './ServerWakeHint'
 import { StatsEditor } from './StatsEditor'
+import { TableEventToast } from './TableEventToast'
 
 describe('StatsEditor', () => {
   it('shows power and steps level/bonus within limits', async () => {
@@ -214,6 +218,128 @@ describe('ServerWakeHint', () => {
 
       // A new wait starts counting from zero
       rerender(<ServerWakeHint active />)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('CombatMode, a lost fight', () => {
+  const actions = <button>смыться</button>
+  const players = [player('p1', 'Alice'), player('p2', 'Bob')]
+
+  it('offers flee and die only to the player themselves, only after losing', async () => {
+    render(<CombatMode players={players} defaultPlayerId="p1" lostActions={actions} />)
+    const monster = screen.getByLabelText('Сила противника')
+
+    await userEvent.type(monster, '9')
+    expect(screen.getByRole('button', { name: 'смыться' })).toBeInTheDocument()
+
+    await userEvent.clear(monster)
+    await userEvent.type(monster, '1') // 1 vs 1: a draw, the monster wins it
+    expect(screen.getByRole('status')).toHaveTextContent('Ничья')
+    expect(screen.getByRole('button', { name: 'смыться' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Alice: карта +1' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Победа')
+    expect(screen.queryByRole('button', { name: 'смыться' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Кто сражается' })).getByRole('radio', { name: /Bob/ }))
+    await userEvent.clear(monster)
+    await userEvent.type(monster, '9')
+    expect(screen.queryByRole('button', { name: 'смыться' })).not.toBeInTheDocument()
+  })
+})
+
+describe('FleeActions', () => {
+  const flee = (seq: number, newValue: string, playerId = 'p1') =>
+    entry({ seq, eventType: 'flee', playerId, newValue })
+
+  function setup() {
+    const send = vi.spyOn(gameStore.getState(), 'flee').mockImplementation(() => {})
+    gameStore.setState({ playerId: 'p1', connectionStatus: 'connected', changelog: [flee(1, '6')] })
+    const onDie = vi.fn()
+    const onCloseCombat = vi.fn()
+    render(<FleeActions onDie={onDie} onCloseCombat={onCloseCombat} />)
+    return { send, onDie, onCloseCombat }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    gameStore.setState({ playerId: '', changelog: [], connectionStatus: 'disconnected' })
+  })
+
+  it('shows the roll the server sent, not an older or someone else\'s', async () => {
+    const { send, onDie } = setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Смыться' }))
+    expect(send).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status')).toHaveTextContent('Бросаем')
+
+    await waitFor(() => new Promise((r) => setTimeout(r, MIN_ROLL_MS + 50)), { timeout: MIN_ROLL_MS + 500 })
+    act(() => gameStore.setState((s) => ({ changelog: [...s.changelog, flee(2, '6', 'p2')] })))
+    expect(screen.getByRole('status')).toHaveTextContent('Бросаем')
+
+    act(() => gameStore.setState((s) => ({ changelog: [...s.changelog, flee(3, '3')] })))
+    expect(screen.getByRole('status')).toHaveTextContent('Не вышло')
+    expect(screen.getByRole('status')).toHaveTextContent('Выпало 3')
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Погибнуть' }))
+    expect(onDie).toHaveBeenCalled()
+  })
+
+  it('lets the die tumble before a fast answer, then closes the fight on success', async () => {
+    const { onCloseCombat } = setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Смыться' }))
+    act(() => gameStore.setState((s) => ({ changelog: [...s.changelog, flee(2, '5')] })))
+    expect(screen.getByRole('status')).toHaveTextContent('Бросаем')
+
+    expect(await screen.findByText('Смылись!', {}, { timeout: MIN_ROLL_MS + 500 })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть бой' }))
+    expect(onCloseCombat).toHaveBeenCalled()
+  })
+})
+
+describe('DeathDialog', () => {
+  const me = player('p1', 'Alice', { level: 7, gearBonus: 5 })
+
+  it('takes the level by default, the gear alone on request', async () => {
+    const onConfirm = vi.fn()
+    render(<DeathDialog open onOpenChange={() => {}} player={me} onConfirm={onConfirm} />)
+    expect(screen.getByRole('radio', { name: /Бонусы 5 → 0, уровень 7 → 1/ })).toBeChecked()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Погибнуть' }))
+    expect(onConfirm).toHaveBeenLastCalledWith(true)
+  })
+
+  it('can spare the level', async () => {
+    const onConfirm = vi.fn()
+    render(<DeathDialog open onOpenChange={() => {}} player={me} onConfirm={onConfirm} />)
+    await userEvent.click(screen.getByRole('radio', { name: /Только вещи/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Погибнуть' }))
+    expect(onConfirm).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe('TableEventToast', () => {
+  const now = () => Date.now()
+
+  it('tells about others, not about us or old history, and goes away', () => {
+    vi.useFakeTimers()
+    try {
+      const mine = entry({ seq: 1, playerId: 'p1', eventType: 'flee', newValue: '6', timestamp: now() })
+      const old = entry({ seq: 2, playerId: 'p2', playerName: 'Bob', eventType: 'flee', newValue: '6', timestamp: now() - 60_000 })
+      const { rerender } = render(<TableEventToast entries={[mine, old]} playerId="p1" />)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+      const roll = entry({ seq: 3, playerId: 'p2', playerName: 'Bob', eventType: 'flee', newValue: '3', timestamp: now() })
+      rerender(<TableEventToast entries={[mine, old, roll]} playerId="p1" />)
+      expect(screen.getByRole('status')).toHaveTextContent('Bob смывается: выпало 3, не вышло')
+
+      // Our own next move neither hides it nor keeps it forever
+      const next = entry({ seq: 4, playerId: 'p1', eventType: 'stat_change', timestamp: now() })
+      rerender(<TableEventToast entries={[mine, old, roll, next]} playerId="p1" />)
+      expect(screen.getByRole('status')).toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(4000))
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
     } finally {
       vi.useRealTimers()
