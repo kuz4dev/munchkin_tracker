@@ -20,6 +20,7 @@ import { GameSummary } from '@/components/GameSummary'
 import { InviteButton } from '@/components/InviteButton'
 import { PlayerCard } from '@/components/PlayerCard'
 import { RoomHeader } from '@/components/RoomHeader'
+import { ServerWakeHint } from '@/components/ServerWakeHint'
 import { StatsEditor } from '@/components/StatsEditor'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog, Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -232,6 +233,9 @@ function Waiting({ text }: { text: string }) {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="mb-4 size-9 animate-spin rounded-full border-4 border-mustard border-t-transparent" aria-hidden="true" />
       <p className="text-base font-semibold text-muted-foreground">{text}</p>
+      <div className="mt-5 w-full">
+        <ServerWakeHint active />
+      </div>
     </div>
   )
 }

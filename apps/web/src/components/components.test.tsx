@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { entry, player } from '@/test/fixtures'
@@ -7,6 +7,7 @@ import { CombatMode } from './CombatMode'
 import { FinishGameDialog } from './FinishGameDialog'
 import { GameSummary } from './GameSummary'
 import { PlayerCard } from './PlayerCard'
+import { ServerWakeHint, WAKE_HINT_DELAY } from './ServerWakeHint'
 import { StatsEditor } from './StatsEditor'
 
 describe('StatsEditor', () => {
@@ -195,5 +196,27 @@ describe('GameSummary', () => {
   it('handles a game without a winner', () => {
     render(<GameSummary players={[player('b', 'Боб')]} playerId="b" winnerId="" createdAt={0} finishedAt={0} onLeave={() => {}} />)
     expect(screen.getByText('Без победителя')).toBeInTheDocument()
+  })
+})
+
+describe('ServerWakeHint', () => {
+  it('appears only when the wait is long and goes away with it', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<ServerWakeHint active />)
+      act(() => vi.advanceTimersByTime(WAKE_HINT_DELAY - 1))
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(1))
+      expect(screen.getByRole('status')).toHaveTextContent('Будим сервер')
+
+      rerender(<ServerWakeHint active={false} />)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+      // A new wait starts counting from zero
+      rerender(<ServerWakeHint active />)
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowRight } from 'lucide-react'
 import { HeroArt } from '@/components/art'
+import { ServerWakeHint } from '@/components/ServerWakeHint'
 import { describeJoinError } from '@/game/errors'
 import { gameActions, useGame } from '@/game/store'
 import { InstallHint } from '@/pwa/InstallHint'
@@ -132,6 +133,8 @@ export default function HomePage() {
               {busy === 'join' ? 'Входим...' : 'Войти'}
             </Button>
           </form>
+
+          <ServerWakeHint active={!!busy} />
         </div>
 
         <div className="mt-auto pt-8">
