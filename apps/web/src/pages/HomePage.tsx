@@ -68,7 +68,7 @@ export default function HomePage() {
   }
 
   const field =
-    'h-14 rounded-2xl border-2 border-border bg-card px-[18px] text-[17px] shadow-none focus-visible:border-primary focus-visible:ring-primary/20'
+    'h-14 rounded-2xl border-2 border-border bg-card px-[18px] text-[17px] shadow-none focus-visible:border-primary focus-visible:ring-primary/20 [&:not(:placeholder-shown)]:font-display'
 
   return (
     <div className="flex min-h-dvh justify-center bg-background [padding-bottom:max(1.5rem,env(safe-area-inset-bottom))]">
@@ -120,7 +120,7 @@ export default function HomePage() {
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="Код комнаты"
-              className={`${field} min-w-0 flex-1 uppercase placeholder:normal-case [&:not(:placeholder-shown)]:font-display [&:not(:placeholder-shown)]:tracking-[0.2em]`}
+              className={`${field} min-w-0 flex-1 uppercase placeholder:normal-case [&:not(:placeholder-shown)]:tracking-[0.2em]`}
               maxLength={ROOM_CODE_LENGTH}
               autoComplete="off"
               autoCapitalize="characters"
