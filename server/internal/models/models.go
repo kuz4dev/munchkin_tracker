@@ -22,7 +22,7 @@ const (
 var (
 	validGenders = map[string]bool{"male": true, "female": true}
 	validRaces   = map[string]bool{"human": true, "elf": true, "dwarf": true, "halfling": true, "orc": true, "gnome": true}
-	validClasses = map[string]bool{"none": true, "warrior": true, "wizard": true, "thief": true, "cleric": true, "barbarian": true, "bard": true, "ranger": true}
+	validClasses = map[string]bool{"none": true, "warrior": true, "wizard": true, "thief": true, "cleric": true, "bard": true, "ranger": true}
 )
 
 // Stats are the player-editable fields. Clients may only change these.

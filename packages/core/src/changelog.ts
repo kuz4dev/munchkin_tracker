@@ -59,7 +59,8 @@ export function formatFieldValue(field: string | undefined, value: string | unde
     case 'race':
       return value.split('+').map((r) => getLabel(RACES, r)).join(' + ')
     case 'class':
-      return value.split('+').map((c) => getLabel(CLASSES, c)).join(' + ')
+      // Old journals may mention Barbarian, a class that no longer exists
+      return value.split('+').map((c) => (c === 'barbarian' ? 'Варвар' : getLabel(CLASSES, c))).join(' + ')
     case 'halfBreed':
     case 'superMunchkin':
       return value === 'yes' ? 'да' : 'нет'

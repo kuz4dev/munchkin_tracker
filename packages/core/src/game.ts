@@ -31,7 +31,6 @@ export const CLASSES: Option<PlayerStats['class']>[] = [
   { value: 'wizard', label: 'Волшебник' },
   { value: 'thief', label: 'Вор' },
   { value: 'cleric', label: 'Клирик' },
-  { value: 'barbarian', label: 'Варвар' },
   { value: 'bard', label: 'Бард' },
   { value: 'ranger', label: 'Рейнджер' },
 ]

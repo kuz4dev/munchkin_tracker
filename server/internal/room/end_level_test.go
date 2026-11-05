@@ -73,11 +73,19 @@ func TestExpansionRacesAndClasses(t *testing.T) {
 			t.Errorf("race %s: %v", race, err)
 		}
 	}
-	for _, class := range []string{"barbarian", "bard", "ranger"} {
+	for _, class := range []string{"bard", "ranger"} {
 		s := models.DefaultStats()
 		s.Class = class
 		if err := s.Validate(); err != nil {
 			t.Errorf("class %s: %v", class, err)
 		}
+	}
+}
+
+func TestBarbarianIsNotAClass(t *testing.T) {
+	s := models.DefaultStats()
+	s.Class = "barbarian"
+	if s.Validate() == nil {
+		t.Error("barbarian should be rejected")
 	}
 }

@@ -6,7 +6,7 @@ export interface PlayerStats {
   gearBonus: number
   gender: 'male' | 'female'
   race: 'human' | 'elf' | 'dwarf' | 'halfling' | 'orc' | 'gnome'
-  class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric' | 'barbarian' | 'bard' | 'ranger'
+  class: 'none' | 'warrior' | 'wizard' | 'thief' | 'cleric' | 'bard' | 'ranger'
   /** The Half-Breed card allows a second race; it also works with just one */
   halfBreed?: boolean
   race2?: PlayerStats['race'] | ''
