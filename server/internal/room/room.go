@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"time"
@@ -396,6 +397,56 @@ func (r *Room) UpdateStats(c Client, stats models.Stats) error {
 		entry := r.appendEventLocked(player, "stat_change", ch.field, ch.old, ch.new)
 		r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
 	}
+	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: player})
+	return nil
+}
+
+// Flee rolls the die for running away from a monster. The server rolls, so
+// everyone at the table sees the same honest result; it goes out as a "flee"
+// event with the roll in NewValue.
+func (r *Room) Flee(c Client) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	s := r.byClient[c.ID()]
+	if s == nil {
+		return ErrNotInRoom
+	}
+	if r.status != store.StatusActive {
+		return ErrGameFinished
+	}
+	roll := rand.IntN(6) + 1
+	entry := r.appendEventLocked(s.player, "flee", "", "", strconv.Itoa(roll))
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
+	return nil
+}
+
+// Die takes the player's gear and, by the table's house rule, their level.
+// It is one "die" event with OldValue and NewValue as "level/gear".
+func (r *Room) Die(c Client, loseLevel bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	s := r.byClient[c.ID()]
+	if s == nil {
+		return ErrNotInRoom
+	}
+	if r.status != store.StatusActive {
+		return ErrGameFinished
+	}
+	player := s.player
+	old := player.Stats
+	stats := old
+	stats.GearBonus = models.MinGearBonus
+	if loseLevel {
+		stats.Level = models.MinLevel
+	}
+	player.Stats = stats
+	r.persist.Enqueue(store.UpdateSeatStats{SeatID: player.ID, Stats: stats})
+	entry := r.appendEventLocked(player, "die", "",
+		strconv.Itoa(old.Level)+"/"+strconv.Itoa(old.GearBonus),
+		strconv.Itoa(stats.Level)+"/"+strconv.Itoa(stats.GearBonus))
+	r.broadcastLocked(models.OutgoingMessage{Type: "changelog_entry", ChangeLogEntry: entry})
 	r.broadcastLocked(models.OutgoingMessage{Type: "player_updated", Player: player})
 	return nil
 }

@@ -144,6 +144,8 @@ type IncomingMessage struct {
 	Player *Stats `json:"player,omitempty"`
 	// WinnerID is the winning player for finish_game; empty for no winner.
 	WinnerID string `json:"winnerId,omitempty"`
+	// LoseLevel makes "die" reset the level as well as the gear.
+	LoseLevel bool `json:"loseLevel,omitempty"`
 }
 
 type OutgoingMessage struct {

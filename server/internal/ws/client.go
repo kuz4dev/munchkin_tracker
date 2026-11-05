@@ -186,6 +186,10 @@ func (c *Client) handleMessage(data []byte) {
 		c.handleLeaveRoom()
 	case "finish_game":
 		c.handleFinishGame(msg)
+	case "flee":
+		c.handleFlee()
+	case "die":
+		c.handleDie(msg)
 	default:
 		c.sendError("unknown message type")
 	}
@@ -245,6 +249,26 @@ func (c *Client) handleFinishGame(msg models.IncomingMessage) {
 		return
 	}
 	if err := c.room.Finish(c, msg.WinnerID); err != nil {
+		c.sendError(err.Error())
+	}
+}
+
+func (c *Client) handleFlee() {
+	if c.room == nil {
+		c.sendError(room.ErrNotInRoom.Error())
+		return
+	}
+	if err := c.room.Flee(c); err != nil {
+		c.sendError(err.Error())
+	}
+}
+
+func (c *Client) handleDie(msg models.IncomingMessage) {
+	if c.room == nil {
+		c.sendError(room.ErrNotInRoom.Error())
+		return
+	}
+	if err := c.room.Die(c, msg.LoseLevel); err != nil {
 		c.sendError(err.Error())
 	}
 }
