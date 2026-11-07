@@ -69,24 +69,78 @@ describe('useWakeLock', () => {
 })
 
 describe('install', () => {
-  it('shows the install button once the browser allows it', async () => {
-    const { InstallHint } = await import('./InstallHint')
-    render(<InstallHint />)
-    expect(screen.queryByRole('button', { name: 'Установить на телефон' })).not.toBeInTheDocument()
-
+  function offerInstall(outcome: 'accepted' | 'dismissed') {
     const prompt = vi.fn(async () => {})
     const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
       prompt,
-      userChoice: Promise.resolve({ outcome: 'accepted' as const }),
+      userChoice: Promise.resolve({ outcome }),
     })
     act(() => {
       window.dispatchEvent(event)
     })
+    return { event, prompt }
+  }
+
+  async function freshHint() {
+    vi.resetModules() // the install state lives in the module
+    const { InstallHint } = await import('./InstallHint')
+    render(<InstallHint />)
+  }
+
+  it('shows the button once the browser allows it, then follows the installation', async () => {
+    await freshHint()
+    expect(screen.queryByRole('button', { name: 'Установить на телефон' })).not.toBeInTheDocument()
+
+    const { event, prompt } = offerInstall('accepted')
     expect(event.defaultPrevented).toBe(true) // our button instead of the mini-infobar
 
     await userEvent.click(screen.getByRole('button', { name: 'Установить на телефон' }))
     expect(prompt).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Установить на телефон' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('status')).toHaveTextContent('Устанавливается')
+    expect(screen.getByRole('status')).toHaveTextContent('выключите VPN')
+
+    act(() => {
+      window.dispatchEvent(new Event('appinstalled'))
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Готово! Ищите «Манчкин»')
+  })
+
+  it('says how to install later after a refusal, and brings the button back when the browser allows', async () => {
+    await freshHint()
+    offerInstall('dismissed')
+    await userEvent.click(screen.getByRole('button', { name: 'Установить на телефон' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Установка отменена')
+
+    offerInstall('accepted')
+    expect(screen.getByRole('button', { name: 'Установить на телефон' })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+describe('add to Home Screen on iOS', () => {
+  const iphone = (os: string, browser: string) =>
+    `Mozilla/5.0 (iPhone; CPU iPhone OS ${os} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ${browser} Mobile/15E148 Safari/604.1`
+  const check = async (ua: string, touch = 5) => (await import('./install')).canAddToHomeScreenOnIos(ua, touch)
+
+  it('works in Safari on any version', async () => {
+    expect(await check(iphone('15_0', 'Version/15.0'))).toBe(true)
+    expect(await check(iphone('18_1', 'Version/18.1'))).toBe(true)
+  })
+
+  it('works in Chrome and Edge since iOS 16.4', async () => {
+    expect(await check(iphone('16_4', 'CriOS/120.0'))).toBe(true)
+    expect(await check(iphone('17_0', 'EdgiOS/120.0'))).toBe(true)
+    expect(await check(iphone('16_3', 'CriOS/110.0'))).toBe(false)
+    expect(await check(iphone('15_7', 'EdgiOS/110.0'))).toBe(false)
+  })
+
+  it('is not offered elsewhere', async () => {
+    expect(await check(iphone('18_0', 'FxiOS/120.0'))).toBe(false)
+    expect(await check('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36')).toBe(false)
+    expect(await check('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15', 0)).toBe(false)
+    expect(await check('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15', 5)).toBe(true) // iPad
+    expect(await check('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Telegram')).toBe(false) // in-app browser
   })
 })
 

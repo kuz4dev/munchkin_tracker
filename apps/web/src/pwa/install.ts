@@ -8,6 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 let deferred: BeforeInstallPromptEvent | null = null
+let installed = false
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach((l) => l())
 
@@ -18,6 +19,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 })
 window.addEventListener('appinstalled', () => {
   deferred = null
+  installed = true
   notify()
 })
 
@@ -40,6 +42,11 @@ export function useCanInstall(): boolean {
   return useSyncExternalStore(subscribe, () => deferred !== null)
 }
 
+/** The browser reported that the installation has finished. */
+export function useInstalled(): boolean {
+  return useSyncExternalStore(subscribe, () => installed)
+}
+
 /** Already running as an installed app (home-screen icon). */
 export function isStandalone(): boolean {
   return (
@@ -48,9 +55,17 @@ export function isStandalone(): boolean {
   )
 }
 
-/** iPhone/iPad Safari has no install prompt: installing is manual via Share. */
-export function isIosSafari(): boolean {
-  const ua = navigator.userAgent
-  const ios = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && navigator.maxTouchPoints > 1)
-  return ios && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)
+/**
+ * iOS has no install prompt: installing is manual, from the Share menu. Safari
+ * always offers it there; Chrome and Edge do since iOS 16.4.
+ */
+export function canAddToHomeScreenOnIos(ua = navigator.userAgent, touchPoints = navigator.maxTouchPoints): boolean {
+  const ios = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && touchPoints > 1)
+  if (!ios || !/Safari/.test(ua)) return false
+  if (/FxiOS/.test(ua)) return false
+  if (!/CriOS|EdgiOS/.test(ua)) return true
+  const version = /OS (\d+)[_.](\d+)/.exec(ua)
+  if (!version) return false
+  const [major, minor] = [Number(version[1]), Number(version[2])]
+  return major > 16 || (major === 16 && minor >= 4)
 }
