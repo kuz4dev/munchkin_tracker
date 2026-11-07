@@ -103,7 +103,7 @@ describe('install', () => {
     act(() => {
       window.dispatchEvent(new Event('appinstalled'))
     })
-    expect(screen.getByRole('status')).toHaveTextContent('Готово! Ищите «Манчкин»')
+    expect(screen.getByRole('status')).toHaveTextContent('Готово, приложение установилось')
     expect(screen.getByRole('status')).not.toHaveTextContent('Устанавливается')
   })
 
@@ -116,7 +116,7 @@ describe('install', () => {
       act(() => {
         window.dispatchEvent(new Event('appinstalled'))
       })
-      expect(screen.getByRole('status')).toHaveTextContent('Готово!')
+      expect(screen.getByRole('status')).toHaveTextContent('Готово, приложение установилось')
       act(() => {
         vi.advanceTimersByTime(3999)
       })

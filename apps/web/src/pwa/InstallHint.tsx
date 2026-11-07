@@ -38,7 +38,7 @@ export function InstallHint() {
           className="flex animate-in items-center gap-3 rounded-[20px] bg-cocoa px-4 py-3 text-primary-foreground shadow-[0_10px_24px_rgba(58,36,32,0.25)] duration-300 fade-in slide-in-from-bottom-2"
         >
           <CircleCheck className="size-6 shrink-0 text-mustard" aria-hidden="true" />
-          <span className="min-w-0 text-sm font-bold">Готово! Ищите «Манчкин» среди приложений на телефоне</span>
+          <span className="min-w-0 text-sm font-bold">Готово, приложение установилось</span>
         </div>
       </div>
     )
