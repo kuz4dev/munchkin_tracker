@@ -212,6 +212,49 @@ describe('messages', () => {
   })
 })
 
+describe('saved game', () => {
+  const saved = { roomCode: 'ABC234', playerName: 'Alice', sessionId: 'sess-1' }
+
+  it('is what the device remembers, and can be forgotten', async () => {
+    const { session, s } = setup()
+    expect(await s().savedGame()).toBeNull()
+    await session.save(saved)
+    expect(await s().savedGame()).toEqual(saved)
+    await s().forgetSavedGame()
+    expect(await s().savedGame()).toBeNull()
+  })
+
+  it('abandoning takes the seat back and leaves for real', async () => {
+    const { connection, session, s } = setup()
+    await session.save(saved)
+    await s().abandonSavedGame()
+    expect(connection.sent).toEqual([
+      { type: 'join_room', roomCode: 'ABC234', playerName: 'Alice', sessionId: 'sess-1' },
+      { type: 'leave_room' },
+    ])
+    expect(await s().savedGame()).toBeNull()
+    expect(s().roomCode).toBe('')
+  })
+
+  it('abandoning a closed room just forgets it', async () => {
+    const { api, connection, session, s } = setup()
+    await session.save(saved)
+    vi.mocked(api.getRoomInfo).mockRejectedValue(new ApiError('gone', 404))
+    await s().abandonSavedGame()
+    expect(connection.sent).toEqual([])
+    expect(await s().savedGame()).toBeNull()
+    expect(s().notice).not.toBe('')
+  })
+
+  it('abandoning with the server unreachable also forgets it', async () => {
+    const { api, session, s } = setup()
+    await session.save(saved)
+    vi.mocked(api.getRoomInfo).mockRejectedValue(new ApiError('down', 0))
+    await s().abandonSavedGame()
+    expect(await s().savedGame()).toBeNull()
+  })
+})
+
 describe('end level', () => {
   it('comes with the room, follows changes, and the host asks to change it', async () => {
     const { connection, s } = setup()

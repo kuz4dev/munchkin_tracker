@@ -1,4 +1,5 @@
 import { MAX_NAME_LENGTH, normalizeRoomCode, ROOM_CODE_LENGTH } from '@munchkin/core'
+import { cn } from 'cn'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -6,9 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowRight } from 'lucide-react'
 import { HeroArt } from '@/components/art'
+import { ResumeCard } from '@/components/ResumeCard'
 import { ServerWakeHint } from '@/components/ServerWakeHint'
 import { describeJoinError } from '@/game/errors'
 import { gameActions, useGame } from '@/game/store'
+import { useSavedGame } from '@/game/useSavedGame'
 import { InstallHint } from '@/pwa/InstallHint'
 
 export default function HomePage() {
@@ -19,7 +22,9 @@ export default function HomePage() {
 
   const [name, setName] = useState('')
   const [code, setCode] = useState(() => (params.get('code') ?? '').toUpperCase())
-  const [busy, setBusy] = useState<'create' | 'join' | null>(null)
+  const [busy, setBusy] = useState<'create' | 'join' | 'abandon' | null>(null)
+  const { game: saved, clear: clearSaved } = useSavedGame()
+  const canResume = !!saved && saved.phase !== 'gone'
   const [error, setError] = useState('')
 
   // A notice explains why we were sent back here (room closed, etc.)
@@ -57,6 +62,16 @@ export default function HomePage() {
     }
   }
 
+  async function abandon() {
+    setBusy('abandon')
+    try {
+      await gameActions().abandonSavedGame()
+      clearSaved()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   function onNameSubmit(e: FormEvent) {
     e.preventDefault()
     void (code ? join() : create())
@@ -73,14 +88,25 @@ export default function HomePage() {
   return (
     <div className="flex min-h-dvh justify-center bg-background [padding-bottom:max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="flex w-full max-w-md flex-col px-[22px]">
-        <HeroArt className="-mx-[22px] w-[calc(100%+44px)] max-w-none" />
+        {/* With a saved game the art gives up its empty top, so the card and the form fit */}
+        <HeroArt className={cn('-mx-[22px] w-[calc(100%+44px)] max-w-none', saved && '-mt-14')} />
 
-        <h1 className="mt-6 font-display text-[40px] leading-none font-extrabold text-foreground">Манчкин</h1>
-        <p className="mt-2.5 max-w-xs text-base leading-relaxed text-muted-foreground">
-          Ведите уровни всей компании в реальном времени — каждый со своего телефона
-        </p>
+        <h1 className={cn('font-display leading-none font-extrabold text-foreground', saved ? 'mt-4 text-[34px]' : 'mt-6 text-[40px]')}>Манчкин</h1>
+        {saved ? (
+          <ResumeCard
+            game={saved}
+            disabled={!!busy}
+            onResume={() => navigate(`/room/${saved.roomCode}`)}
+            onAbandon={() => void abandon()}
+            onDismiss={clearSaved}
+          />
+        ) : (
+          <p className="mt-2.5 max-w-xs text-base leading-relaxed text-muted-foreground">
+            Ведите уровни всей компании в реальном времени — каждый со своего телефона
+          </p>
+        )}
 
-        <div className="mt-6 flex flex-col gap-3">
+        <div className={cn('flex flex-col gap-3', saved ? 'mt-3.5' : 'mt-6')}>
           <form onSubmit={onNameSubmit}>
             <Label htmlFor="name" className="sr-only">
               Ваше имя
@@ -103,11 +129,15 @@ export default function HomePage() {
           )}
 
           <Button
-            className="h-14 justify-between rounded-2xl px-5 font-display text-base font-semibold"
+            variant={canResume ? 'outline' : 'default'}
+            className={cn(
+              'h-14 justify-between rounded-2xl px-5 font-display font-semibold',
+              canResume ? 'border-2 border-primary bg-transparent text-[15px] text-primary hover:bg-secondary hover:text-primary' : 'text-base',
+            )}
             disabled={!!busy}
             onClick={create}
           >
-            {busy === 'create' ? 'Создаём...' : 'Создать комнату'}
+            {busy === 'create' ? 'Создаём...' : canResume ? 'Создать новую комнату' : 'Создать комнату'}
             <ArrowRight className="size-5" aria-hidden="true" />
           </Button>
 

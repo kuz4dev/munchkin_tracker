@@ -1,9 +1,9 @@
 import { ApiError } from '@munchkin/core'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { gameStore } from '@/game/store'
+import { api, gameStore } from '@/game/store'
 import HomePage from './HomePage'
 
 function renderAt(url = '/') {
@@ -75,5 +75,85 @@ describe('HomePage', () => {
     gameStore.setState({ notice: 'Комната не найдена или уже закрыта' })
     renderAt()
     expect(screen.getByRole('alert')).toHaveTextContent('Комната не найдена или уже закрыта')
+  })
+})
+
+describe('HomePage with a saved game', () => {
+  const saved = { roomCode: 'ABC234', playerName: 'Alice', sessionId: 's1' }
+
+  function withSaved() {
+    vi.spyOn(gameStore.getState(), 'savedGame').mockResolvedValue(saved)
+  }
+
+  it('shows nothing extra without one', async () => {
+    renderAt()
+    expect(await screen.findByRole('button', { name: 'Создать комнату' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Незаконченная партия' })).not.toBeInTheDocument()
+  })
+
+  it('offers to return to the game', async () => {
+    withSaved()
+    vi.spyOn(api, 'getRoomInfo').mockResolvedValue({ code: 'ABC234', playerCount: 2 })
+    renderAt()
+    const card = await screen.findByRole('region', { name: 'Незаконченная партия' })
+    expect(card).toHaveTextContent('Alice')
+    expect(card).toHaveTextContent('Комната ABC234')
+    expect(screen.getByRole('button', { name: 'Создать новую комнату' })).toBeInTheDocument()
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Вернуться в игру' }))
+    expect(await screen.findByText('room page')).toBeInTheDocument()
+  })
+
+  it('tells when the room is gone and forgets it', async () => {
+    withSaved()
+    const forget = vi.spyOn(gameStore.getState(), 'forgetSavedGame').mockResolvedValue()
+    vi.spyOn(api, 'getRoomInfo').mockRejectedValue(new ApiError('gone', 404))
+    renderAt()
+    expect(await screen.findByText('Партия уже закрыта')).toBeInTheDocument()
+    expect(forget).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Вернуться в игру' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Создать комнату' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Скрыть' }))
+    expect(screen.queryByText('Партия уже закрыта')).not.toBeInTheDocument()
+  })
+
+  it('still offers to return when the server can\'t be reached', async () => {
+    withSaved()
+    vi.spyOn(api, 'getRoomInfo').mockRejectedValue(new ApiError('down', 0))
+    renderAt()
+    expect(await screen.findByRole('button', { name: 'Вернуться в игру' })).toBeInTheDocument()
+  })
+
+  it('explains a long check, then offers to return', async () => {
+    withSaved()
+    let answer: (info: { code: string; playerCount: number }) => void = () => {}
+    vi.spyOn(api, 'getRoomInfo').mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    renderAt()
+    expect(await screen.findByRole('button', { name: 'Вернуться в игру' })).toBeInTheDocument()
+
+    expect(await screen.findByText(/Будим сервер/, {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Вернуться в игру' })).not.toBeInTheDocument()
+
+    answer({ code: 'ABC234', playerCount: 2 })
+    expect(await screen.findByRole('button', { name: 'Вернуться в игру' })).toBeInTheDocument()
+  }, 7000)
+
+  it('leaves for real only after confirming', async () => {
+    withSaved()
+    vi.spyOn(api, 'getRoomInfo').mockResolvedValue({ code: 'ABC234', playerCount: 2 })
+    const abandon = vi.spyOn(gameStore.getState(), 'abandonSavedGame').mockResolvedValue()
+    renderAt()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выйти из этой партии' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Выйти из этой партии?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Остаться' }))
+    expect(abandon).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Вернуться в игру' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти из этой партии' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Выйти' }))
+    await waitFor(() => expect(abandon).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Незаконченная партия' })).not.toBeInTheDocument())
   })
 })

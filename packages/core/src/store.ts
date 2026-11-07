@@ -3,7 +3,7 @@ import { ApiError, type Api } from './api'
 import type { Connection, ConnectionStatus } from './connection'
 import { DEFAULT_END_LEVEL, MIN_GEAR_BONUS, MIN_LEVEL, normalizeRoomCode } from './game'
 import { ServerErrors, type ChangeLogEntry, type GameStatus, type Player, type PlayerStats, type ServerMessage } from './protocol'
-import type { SessionStorage } from './session'
+import type { SessionData, SessionStorage } from './session'
 
 /** Max changelog entries kept on the client (live + loaded history) */
 export const MAX_CHANGELOG = 1000
@@ -47,6 +47,12 @@ export interface GameActions {
   joinRoom(code: string, name: string): Promise<void>
   /** Gets back into the stored game for this room code after an app restart. */
   resumeSession(code: string): Promise<ResumeResult>
+  /** The game this device can return to, if any. */
+  savedGame(): Promise<SessionData | null>
+  /** Forgets the saved game on this device; the seat stays at the table. */
+  forgetSavedGame(): Promise<void>
+  /** Really leaves the saved game: takes the seat back, then gives it up. */
+  abandonSavedGame(): Promise<void>
   updateStats(stats: Partial<PlayerStats>): void
   /** Ends the game for everyone (host only). Omit winnerId for no winner. */
   finishGame(winnerId?: string): void
@@ -283,6 +289,27 @@ export function createGameStore({ connection, api, session }: GameStoreDeps): Ga
         return result
       },
 
+
+      savedGame() {
+        return session.load()
+      },
+
+      forgetSavedGame() {
+        return session.clear()
+      },
+
+      async abandonSavedGame() {
+        const saved = await session.load()
+        if (!saved) return
+        const result = await get().resumeSession(saved.roomCode)
+        if (result === 'resumed') {
+          get().leaveRoom()
+          set({ notice: '' })
+        } else {
+          // Nothing to leave, or no server to tell: the seat stays until the room closes
+          await session.clear()
+        }
+      },
 
       updateStats(stats) {
         const { players, playerId } = get()
