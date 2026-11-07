@@ -104,6 +104,30 @@ describe('install', () => {
       window.dispatchEvent(new Event('appinstalled'))
     })
     expect(screen.getByRole('status')).toHaveTextContent('Готово! Ищите «Манчкин»')
+    expect(screen.getByRole('status')).not.toHaveTextContent('Устанавливается')
+  })
+
+  it('the "installed" toast goes away by itself', async () => {
+    vi.resetModules()
+    const { InstallHint } = await import('./InstallHint')
+    vi.useFakeTimers()
+    try {
+      render(<InstallHint />)
+      act(() => {
+        window.dispatchEvent(new Event('appinstalled'))
+      })
+      expect(screen.getByRole('status')).toHaveTextContent('Готово!')
+      act(() => {
+        vi.advanceTimersByTime(3999)
+      })
+      expect(screen.getByRole('status')).toBeInTheDocument()
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('says how to install later after a refusal, and brings the button back when the browser allows', async () => {
