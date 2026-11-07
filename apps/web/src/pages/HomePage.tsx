@@ -24,7 +24,6 @@ export default function HomePage() {
   const [code, setCode] = useState(() => (params.get('code') ?? '').toUpperCase())
   const [busy, setBusy] = useState<'create' | 'join' | 'abandon' | null>(null)
   const { game: saved, clear: clearSaved } = useSavedGame()
-  const canResume = !!saved && saved.phase !== 'gone'
   const [error, setError] = useState('')
 
   // A notice explains why we were sent back here (room closed, etc.)
@@ -92,7 +91,10 @@ export default function HomePage() {
         <HeroArt className={cn('-mx-[22px] w-[calc(100%+44px)] max-w-none', saved && '-mt-14')} />
 
         <h1 className={cn('font-display leading-none font-extrabold text-foreground', saved ? 'mt-4 text-[34px]' : 'mt-6 text-[40px]')}>Манчкин</h1>
-        {saved ? (
+        <p className="mt-2.5 max-w-xs text-base leading-relaxed text-muted-foreground">
+          Ведите уровни всей компании в реальном времени — каждый со своего телефона
+        </p>
+        {saved && (
           <ResumeCard
             game={saved}
             disabled={!!busy}
@@ -100,10 +102,6 @@ export default function HomePage() {
             onAbandon={() => void abandon()}
             onDismiss={clearSaved}
           />
-        ) : (
-          <p className="mt-2.5 max-w-xs text-base leading-relaxed text-muted-foreground">
-            Ведите уровни всей компании в реальном времени — каждый со своего телефона
-          </p>
         )}
 
         <div className={cn('flex flex-col gap-3', saved ? 'mt-3.5' : 'mt-6')}>
@@ -129,15 +127,11 @@ export default function HomePage() {
           )}
 
           <Button
-            variant={canResume ? 'outline' : 'default'}
-            className={cn(
-              'h-14 justify-between rounded-2xl px-5 font-display font-semibold',
-              canResume ? 'border-2 border-primary bg-transparent text-[15px] text-primary hover:bg-secondary hover:text-primary' : 'text-base',
-            )}
+            className="h-14 justify-between rounded-2xl px-5 font-display text-base font-semibold"
             disabled={!!busy}
             onClick={create}
           >
-            {busy === 'create' ? 'Создаём...' : canResume ? 'Создать новую комнату' : 'Создать комнату'}
+            {busy === 'create' ? 'Создаём...' : 'Создать комнату'}
             <ArrowRight className="size-5" aria-hidden="true" />
           </Button>
 

@@ -98,7 +98,8 @@ describe('HomePage with a saved game', () => {
     const card = await screen.findByRole('region', { name: 'Незаконченная партия' })
     expect(card).toHaveTextContent('Alice')
     expect(card).toHaveTextContent('Комната ABC234')
-    expect(screen.getByRole('button', { name: 'Создать новую комнату' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Создать комнату' })).toBeInTheDocument()
+    expect(screen.getByText(/Ведите уровни всей компании/)).toBeInTheDocument()
 
     await userEvent.click(within(card).getByRole('button', { name: 'Вернуться в игру' }))
     expect(await screen.findByText('room page')).toBeInTheDocument()
