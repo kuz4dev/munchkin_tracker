@@ -149,6 +149,9 @@ export function CheckDot({ checked, tone = 'primary' }: { checked: boolean; tone
       </svg>
     </span>
   ) : (
-    <span className="size-6 shrink-0 rounded-full border-2 border-border bg-card" aria-hidden="true" />
+    // The same box as the check, so nothing shifts when a tile gets selected
+    <span className="flex size-7 shrink-0 items-center justify-center" aria-hidden="true">
+      <span className="size-6 rounded-full border-2 border-border bg-card" />
+    </span>
   )
 }

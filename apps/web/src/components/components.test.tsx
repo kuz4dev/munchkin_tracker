@@ -264,7 +264,7 @@ describe('StatsEditor, Half-Breed and Super Munchkin', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('the card works with one race, and turning it off keeps the first race at once', async () => {
+  it('the card works with one race; turning it off keeps the first race on Done', async () => {
     const onChange = vi.fn()
     const me = player('p1', 'Alice', { race: 'elf', race2: 'orc', halfBreed: true })
     render(<StatsEditor player={me} isHost={false} onChange={onChange} />)
@@ -275,7 +275,46 @@ describe('StatsEditor, Half-Breed and Super Munchkin', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф + Орк' }))
     await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    expect(onChange).toHaveBeenCalledTimes(1) // a draft until Done
+    await userEvent.click(screen.getByRole('button', { name: 'Готово' }))
     expect(onChange).toHaveBeenLastCalledWith({ race: 'elf', race2: '', halfBreed: false })
+  })
+
+  it('every open starts from what is saved, not from an abandoned draft', async () => {
+    const onChange = vi.fn()
+    const me = player('p1', 'Alice', { race: 'elf' })
+    const { rerender } = render(<StatsEditor player={me} isHost={false} onChange={onChange} />)
+
+    // A draft closed with the cross is gone
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Орк' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Эльф' }))
+    expect(await screen.findByRole('switch', { name: 'Полукровка' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Эльф' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Орк' })).not.toBeChecked()
+
+    // A race picked without the card is what the switch starts from next time
+    await userEvent.click(screen.getByRole('radio', { name: 'Гном' }))
+    rerender(<StatsEditor player={{ ...me, race: 'gnome' }} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Раса: Гном' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Полукровка' }))
+    expect(screen.getByRole('checkbox', { name: 'Гном' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Эльф' })).not.toBeChecked()
+  })
+
+  it('a choice made under the card survives turning the card off', async () => {
+    const onChange = vi.fn()
+    render(<StatsEditor player={player('p1', 'Alice')} isHost={false} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Класс: Без класса' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Суперманчкин' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Бард' }))
+    await userEvent.click(screen.getByRole('switch', { name: 'Суперманчкин' }))
+    expect(screen.getByRole('radio', { name: 'Бард' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Без класса' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(onChange).toHaveBeenCalledWith({ class: 'bard', class2: '', superMunchkin: false })
   })
 
   it('"no class" can\'t be combined: it replaces the classes and gives way to a real one', async () => {

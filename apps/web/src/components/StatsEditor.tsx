@@ -267,18 +267,16 @@ function DoubleTraitSheet<T extends string>({ label, hint, card, cardHint, optio
           </span>
         )}
       </SheetTrigger>
-      {/* Its state lives in the content, so every open starts from what is saved */}
-      <DoubleTraitContent
-        {...{ label, hint, card, cardHint, options, first, second, cardOn, empty, onChange }}
-        onClose={() => setOpen(false)}
-      />
+      <SheetContent title={label} description={hint}>
+        {/* Inside the content, so its draft is thrown away on close and every open starts from what is saved */}
+        <DoubleTraitForm {...{ label, card, cardHint, options, first, second, cardOn, empty, onChange }} onClose={() => setOpen(false)} />
+      </SheetContent>
     </Sheet>
   )
 }
 
-function DoubleTraitContent<T extends string>({
+function DoubleTraitForm<T extends string>({
   label,
-  hint,
   card,
   cardHint,
   options,
@@ -288,30 +286,25 @@ function DoubleTraitContent<T extends string>({
   empty,
   onChange,
   onClose,
-}: DoubleTraitSheetProps<T> & { onClose: () => void }) {
+}: Omit<DoubleTraitSheetProps<T>, 'hint'> & { onClose: () => void }) {
   const [on, setOn] = useState(cardOn)
   const [picked, setPicked] = useState<readonly T[]>(second ? [first, second] : [first])
   const real = picked.filter((v) => v !== empty)
-  const full = real.length === 2
+  const full = on && real.length === 2
+  const feminine = label === 'Раса'
 
   function save(nextFirst: T, nextSecond: T | '', nextOn: boolean) {
     if (nextFirst !== first || nextSecond !== second || nextOn !== cardOn) onChange(nextFirst, nextSecond, nextOn)
-  }
-
-  function chooseSingle(value: T) {
-    save(value, '', false)
     onClose()
   }
 
   function toggleCard(next: boolean) {
-    const kept = picked[0]!
     setOn(next)
-    setPicked([kept])
-    // Turning a saved card off takes effect at once: without it there is no "Done"
-    if (!next && cardOn) save(kept, '', false)
+    setPicked([picked[0]!])
   }
 
-  function toggle(value: T) {
+  function pick(value: T) {
+    if (!on) return save(value, '', false)
     if (value === empty) return setPicked([value])
     if (picked.includes(value)) {
       const rest = picked.filter((v) => v !== value)
@@ -323,11 +316,19 @@ function DoubleTraitContent<T extends string>({
     if (!full) setPicked([...real, value])
   }
 
-  const countHint = full ? `Выбрано 2 из 2. ${label === 'Раса' ? 'Снимите одну, чтобы взять другую' : 'Снимите один, чтобы взять другой'}` : real.length === 1 ? 'Выбран 1 из 2' : hint
+  const status = !on
+    ? 'Выбор сразу сохранится'
+    : full
+      ? `Выбрано 2 из 2. ${feminine ? 'Снимите одну, чтобы взять другую' : 'Снимите один, чтобы взять другой'}`
+      : real.length === 1
+        ? `${feminine ? 'Выбрана 1 из 2, можно оставить и одну' : 'Выбран 1 из 2, можно оставить и один'}`
+        : 'Можно выбрать два'
 
+  // Both modes share one layout: the sheet is pinned to the bottom, so any
+  // change of its height would make every tile jump when the switch is flipped.
   return (
-    <SheetContent title={label} description={on ? countHint : hint}>
-      <div className={cn('mt-3.5 flex items-center gap-3 rounded-[20px] border-2 py-2.5 pr-3 pl-4', on ? 'border-primary bg-[#fff1e6]' : 'border-border bg-background')}>
+    <>
+      <div className={cn('mt-3.5 flex items-center gap-3 rounded-[20px] border-2 py-2.5 pr-3 pl-4 transition-colors', on ? 'border-primary bg-[#fff1e6]' : 'border-border bg-background')}>
         <div className="min-w-0 flex-1">
           <p className="text-base font-bold">{card}</p>
           <p className="mt-0.5 text-[13px] text-muted-foreground">Есть такая карта? Можно {cardHint}</p>
@@ -345,43 +346,46 @@ function DoubleTraitContent<T extends string>({
         </Switch.Root>
       </div>
 
-      {!on ? (
-        <SingleTiles label={label} options={options} value={first} onChoose={chooseSingle} />
-      ) : (
-        <>
-          <div role="group" aria-label={label} className="mt-3 grid grid-cols-2 gap-2">
-            {options.map((o) => {
-              const checked = picked.includes(o.value)
-              const locked = !checked && full && o.value !== empty
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={checked}
-                  disabled={locked}
-                  onClick={() => toggle(o.value)}
-                  className={cn(tileClass(checked), 'h-[60px]', locked && 'border-dashed bg-transparent font-bold text-muted-foreground')}
-                >
-                  <span className="truncate">{o.label}</span>
-                  {!locked && <CheckDot checked={checked} tone="mustard" />}
-                </button>
-              )
-            })}
-          </div>
-          {real.length === 1 && <p className="mt-3 text-center text-[13px] text-muted-foreground">Можно оставить и {label === 'Раса' ? 'одну' : 'один'}: по правилам это тоже считается</p>}
-          <button
-            type="button"
-            onClick={() => {
-              save(picked[0]!, picked[1] ?? '', true)
-              onClose()
-            }}
-            className="mt-3.5 h-14 w-full rounded-[18px] bg-primary font-display text-[15px] font-semibold text-primary-foreground transition-transform outline-none hover:bg-terracotta-deep focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"
-          >
-            Готово
-          </button>
-        </>
-      )}
-    </SheetContent>
+      <div role={on ? 'group' : 'radiogroup'} aria-label={label} className="mt-3 grid grid-cols-2 gap-2">
+        {options.map((o) => {
+          const checked = picked.includes(o.value)
+          const locked = !checked && full && o.value !== empty
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role={on ? 'checkbox' : 'radio'}
+              aria-checked={checked}
+              disabled={locked}
+              onClick={() => pick(o.value)}
+              className={cn(
+                tileClass(checked),
+                'h-[60px] pr-2.5 pl-3.5 text-[15px]',
+                locked && 'border-dashed bg-transparent text-muted-foreground',
+                // An odd count would leave a hole in the grid: "no class" takes the whole first row
+                o.value === empty && options.length % 2 === 1 && 'col-span-2',
+              )}
+            >
+              <span className="truncate">{o.label}</span>
+              <span className={cn('flex', locked && 'opacity-40')}>
+                <CheckDot checked={checked} tone="mustard" />
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <p role="status" className="mt-3 text-center text-[13px] leading-[18px] text-muted-foreground">
+        {status}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => save(picked[0]!, on ? (picked[1] ?? '') : '', on)}
+        className="mt-3 h-14 w-full rounded-[18px] bg-primary font-display text-[15px] font-semibold text-primary-foreground transition-transform outline-none hover:bg-terracotta-deep focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"
+      >
+        Готово
+      </button>
+    </>
   )
 }
