@@ -53,7 +53,7 @@ export function ResumeCard({ game, disabled, onResume, onAbandon, onDismiss }: R
           type="button"
           disabled={disabled}
           onClick={onResume}
-          className="mt-2.5 flex h-[50px] w-full items-center justify-center gap-2 rounded-full bg-primary text-base font-bold text-primary-foreground transition-transform outline-none hover:bg-terracotta-deep focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98] disabled:opacity-50"
+          className="mt-2.5 flex h-[50px] w-full items-center justify-center gap-2 rounded-full bg-cocoa text-base font-bold text-primary-foreground transition-transform outline-none hover:bg-cocoa/90 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98] disabled:opacity-50"
         >
           Вернуться в игру
           <ArrowRight className="size-5" aria-hidden="true" />
